@@ -12,6 +12,10 @@ __pycache__/
 .venv/
 env/
 
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
 # OS/IDEs
 .DS_Store
 .vscode/

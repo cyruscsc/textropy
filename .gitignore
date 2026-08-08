@@ -1,0 +1,18 @@
+# Environments & Secrets
+.env
+.env.dev
+.env.prod
+.env.*.dev
+.env.*.prod
+
+# Dependency directories
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+env/
+
+# OS/IDEs
+.DS_Store
+.vscode/
+.idea/

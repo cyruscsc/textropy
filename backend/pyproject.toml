@@ -5,9 +5,11 @@ description = "Textropy MVP backend — stateless multi-pass linguistic text ana
 requires-python = ">=3.11,<3.13"
 dependencies = [
     # --- Web framework (spec §8) ---
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "gunicorn>=23.0",
+    # The `standard` extra brings the `fastapi` CLI (`fastapi dev` / `fastapi run`) plus
+    # uvicorn[standard]. The `-no-fastapi-cloud-cli` variant is the same thing minus
+    # fastapi-cloud-cli, a deploy client for FastAPI Cloud that this self-hosted MVP has no
+    # use for and that pulls sentry-sdk in with it.
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.117",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     # --- NLP core ---

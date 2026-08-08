@@ -37,11 +37,14 @@ SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 # --- Runtime ---------------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
 
+# TEXTROPY_ENVIRONMENT=production unmounts /docs, /redoc and /openapi.json. Override with
+# `-e TEXTROPY_ENVIRONMENT=development` to get them back in a local container.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/opt/hf \
-    HF_HUB_OFFLINE=1
+    HF_HUB_OFFLINE=1 \
+    TEXTROPY_ENVIRONMENT=production
 
 WORKDIR /app
 
@@ -59,11 +62,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
 r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')); \
 sys.exit(0 if r['ready'] else 1)"
 
-# Single worker by default: each worker holds its own copy of the models (spec §9), so
-# scaling workers multiplies RAM. Prefer async concurrency over worker count here.
-CMD ["gunicorn", "app.main:app", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "1", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "120", \
-     "--access-logfile", "-"]
+# `fastapi run` binds 0.0.0.0:8000, disables reload, and enables --proxy-headers (needed
+# behind the Caddy reverse proxy). `--workers` is left unset, i.e. one worker: each worker
+# holds its own copy of the models (spec §9), so scaling workers multiplies RAM. Prefer
+# async concurrency over worker count here.
+CMD ["fastapi", "run", "app/main.py", "--port", "8000"]

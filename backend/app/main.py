@@ -35,11 +35,22 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+    docs_enabled = settings.docs_enabled
+    logger.info(
+        "Starting in %s mode (interactive docs %s)",
+        settings.environment,
+        "enabled" if docs_enabled else "disabled",
+    )
+
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
         summary="Stateless multi-pass linguistic text analysis",
         lifespan=lifespan,
+        # Passing None unmounts the route entirely — a 404, not an empty page.
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     app.add_middleware(

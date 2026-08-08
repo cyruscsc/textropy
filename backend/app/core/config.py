@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # --- Environment -------------------------------------------------------------
+    # "production" turns off the interactive docs. The MVP ships without auth or rate
+    # limiting (spec §9), so a public Swagger UI is a convenient way for anyone to aim
+    # synchronous Tier 3 requests at the host's CPU. The frontend reads
+    # `/api/v1/features` for its tier picker, so it never needs /docs.
+    environment: Literal["development", "production"] = "development"
+
     # --- Model loading (spec §4) -------------------------------------------------
     # "eager": load every model in `eager_tiers` during startup, so /health readiness
     #   flips to ready only once they are resident.
@@ -50,6 +57,11 @@ class Settings(BaseSettings):
 
     # Torch intra-op threads; 0 leaves the torch default in place.
     torch_num_threads: int = 0
+
+    @property
+    def docs_enabled(self) -> bool:
+        """Whether /docs, /redoc and /openapi.json are mounted."""
+        return self.environment != "production"
 
 
 _settings: Settings | None = None

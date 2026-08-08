@@ -9,7 +9,7 @@ supported via `Settings.model_loading`:
   smaller startup footprint on memory-constrained hosts.
 
 Note the RAM consequence recorded in spec §9: this registry is per *process*, so running
-multiple Gunicorn workers multiplies resident memory.
+multiple worker processes multiplies resident memory.
 """
 
 from __future__ import annotations

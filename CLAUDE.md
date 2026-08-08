@@ -14,7 +14,10 @@ All backend commands run from `backend/`, which uses **uv** with a project-local
 uv sync                     # base install (includes en_core_web_sm via a pinned URL dep)
 uv sync --extra coref       # + fastcoref, enabling the Tier 2 coreference feature
 
-uv run uvicorn app.main:app --reload --port 8000    # dev server; docs at /docs
+uv run fastapi dev app/main.py                      # dev server, reload; docs at /docs
+
+# production: 0.0.0.0:8000, no reload, proxy headers on, one worker (models are per-process)
+TEXTROPY_ENVIRONMENT=production uv run fastapi run app/main.py
 
 uv run pytest                       # full suite (downloads Tier 2/3 models on first run)
 uv run pytest -m "not heavy"        # fast path: Tier 1 + pure-logic tests, no downloads
@@ -85,6 +88,7 @@ Resolutions of spec ambiguities and non-obvious choices — don't silently "fix"
 - **Tier 3 comparison computers may call the LM directly.** Cross-perplexity conditions B on A, which no per-text signal holds; `lm_extractor.score_continuation` is the cross-text primitive. The rule that stays enforced is never recomputing something a per-text signal already has.
 - **WMD uses POT (`ot.emd2`) over type-level MiniLM vectors**, not gensim. Spec §8 allows either; POT avoids gensim's stricter scipy pin, and type-level vectors are truer to WMD's classical definition than contextual ones.
 - **`feature_names` is an override, not a filter within `tiers`.** When supplied it selects exactly those features and `meta.tiers_computed` is derived from them. It addresses both registries — `features/registry.py` and `comparison/registry.py` each ignore names belonging to the other.
+- **`TEXTROPY_ENVIRONMENT=production` unmounts `/docs`, `/redoc` and `/openapi.json`** (`main.create_app` passes `None` for each URL, so they 404 rather than render empty). Default is `development`, where all three are served. The MVP has no auth or rate limiting, so a public Swagger UI is a convenient way to aim synchronous Tier 3 requests at the host; the frontend uses `/api/v1/features` for its tier picker and never needs `/docs`. `backend/Dockerfile` sets the production value by default.
 - **fastcoref is an optional extra pinned to `transformers<5`.** It reads transformers internals removed in v5 (`all_tied_weights_keys`). Without the extra, `coreference` returns `{"available": false, "reason": ...}` and everything else keeps working — see the degradation path in `services/analysis_service.run_signals` and the tests in `tests/test_optional_model_degradation.py`. Only optional models degrade; a missing required model still raises 503.
 
 ## Folder structure
@@ -121,7 +125,7 @@ Single endpoint drives both modes, synchronous end-to-end (Tier 3 included — n
 
 ## Tech stack
 
-- Backend: FastAPI + Uvicorn/Gunicorn, Pydantic v2, Python 3.11+
+- Backend: FastAPI + Uvicorn via the `fastapi` CLI (`fastapi[standard-no-fastapi-cloud-cli]` — the `standard` extra minus the FastAPI Cloud deploy client), Pydantic v2, Python 3.11+. No gunicorn: the deployment is deliberately one worker, so its process manager bought nothing.
 - NLP/ML: spaCy (`en_core_web_sm`), transformers (DistilBERT SST-2, DistilGPT2), fastcoref, sentence-transformers (`all-MiniLM-L6-v2`), rapidfuzz, scikit-learn (TF-IDF), scipy (JS divergence), gensim/POT (WMD)
 - Frontend: Next.js (App Router) + TypeScript + Tailwind CSS; plain `fetch` against the API, no state management library
 - Containerization: Docker + docker-compose (api, frontend only); Caddy as reverse proxy for automatic HTTPS
@@ -135,4 +139,4 @@ These are deferred to keep the MVP a single Docker service with no external depe
 - No auth/rate limiting (deferred fix: API key + `slowapi`)
 - History is client-only, lost if browser storage is cleared
 - No input length cap enforced yet (deferred fix: tier-dependent max-length validation)
-- Models loaded per Gunicorn worker process multiplies RAM with multiple workers (mitigation: single-worker + async concurrency, or a shared model server)
+- Models are loaded per worker process, so multiple workers multiply RAM (mitigation: single-worker + async concurrency, or a shared model server)

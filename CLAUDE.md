@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). `frontend/` is still an empty placeholder — no Next.js app yet, and no root `docker-compose.yml` (it needs the frontend service to be meaningful).
+The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). The **frontend is scaffolded and working end-to-end** — Next.js 16 (App Router) + React 19 + Tailwind v4, all of §11's components and both layouts (three-pane and the sub-1024px tabbed fallback). Still missing: a root `docker-compose.yml`, and any frontend tests.
 
-The spec is the source of truth for **both** tracks: §2–8 are the backend architecture, §9–13 are the frontend UI spec (layout, state machine, component breakdown, design system, behavioral requirements). Follow its folder structure, component split and design tokens rather than inventing a different layout — building the frontend means implementing §9–13, not designing from scratch.
+The spec is the source of truth for **both** tracks: §2–8 are the backend architecture, §9–13 are the frontend UI spec (layout, state machine, component breakdown, design system, behavioral requirements). Follow its folder structure, component split and design tokens rather than inventing a different layout.
 
 ## Commands
 
@@ -33,9 +33,20 @@ uv run ruff format app tests
 Tier 2/3 tests are marked `heavy` because they load transformer weights. Prefer
 `-m "not heavy"` while iterating on architecture or Tier 1.
 
-No frontend commands yet — `frontend/` is empty. When it is scaffolded, the API expects it
-on `http://localhost:3000` (the sole default in `settings.cors_origins`; override with
-`TEXTROPY_CORS_ORIGINS`). CORS allows only `GET`/`POST` and sends no credentials.
+Frontend commands run from `frontend/` (npm, no monorepo tooling):
+
+```bash
+npm install
+npm run dev                 # http://localhost:3000 — needs the API running too
+npm run build               # production build; also typechecks
+npm run lint                # eslint flat config
+npx tsc --noEmit            # typecheck only
+```
+
+The UI calls `http://localhost:8000` unless `NEXT_PUBLIC_API_BASE_URL` says otherwise, and
+the API's CORS allowlist is `http://localhost:3000` alone (`settings.cors_origins`,
+override with `TEXTROPY_CORS_ORIGINS`) — change one and you must change the other. CORS
+allows only `GET`/`POST` and sends no credentials.
 
 ## What Textropy is
 
@@ -118,14 +129,16 @@ textropy/
 │   ├── Dockerfile
 │   ├── pyproject.toml + uv.lock
 │   └── README.md
-├── frontend/                 # NOT YET BUILT — target shape below is spec §11, follow it
-│   ├── app/{layout.tsx, page.tsx, globals.css}   # page.tsx composes the 3 panes; globals.css holds the tokens
+├── frontend/                 # Next.js 16 App Router, per spec §11
+│   ├── app/{layout.tsx, page.tsx, globals.css}   # page.tsx composes the 3 panes + tabs; globals.css holds the tokens
 │   ├── components/
 │   │   ├── history/{HistoryPane, HistoryListItem, NewAnalysisButton, ClearHistoryButton}.tsx
 │   │   ├── analysis-form/{AnalysisFormPane, ModeToggle, TierSelector, FeatureCheckbox, TextInput, AnalyzeButton}.tsx
 │   │   ├── results/{ResultsPane, ResultsEmptyState, ResultsSkeleton, TierResultSection, MetricRow, ComparisonDiffView, CopyResultsButton}.tsx
 │   │   └── shared/{Toast, ErrorBanner}.tsx
-│   └── lib/{history.ts, api.ts, types.ts, useAnalysisState.ts}
+│   ├── lib/{api.ts, history.ts, types.ts, useAnalysisState.ts, format.ts}   # format.ts is additive: label/number/relative-time helpers
+│   ├── Dockerfile            # 3-stage → standalone server on node:24-alpine, uid 10001
+│   └── README.md
 └── docker-compose.yml        # NOT YET WRITTEN — api + frontend only, no db/cache/worker
 ```
 
@@ -137,9 +150,11 @@ Single endpoint drives both modes, synchronous end-to-end (Tier 3 included — n
 - `GET /api/v1/features` — machine-readable catalog (`name`, `tier`, `scope`, `symmetric`, plus a `requires` signal list) driving the frontend's tier/feature picker. The picker builds itself from this response; never hardcode the feature list in the frontend.
 - `GET /api/v1/health` — liveness/readiness; readiness must reflect whether `models_ml` singletons have finished loading, not just process-up.
 
-## Frontend (spec §9–13 — not yet built)
+## Frontend (spec §9–13 — implemented)
 
-Read §9–13 before writing any UI code; the notes below are the parts worth having in mind up front, not a replacement for the spec.
+Read §9–13 before changing any UI code; the notes below are what the implementation commits to, not a replacement for the spec.
+
+**Stack specifics.** Next.js 16 (Turbopack by default), React 19.2, Tailwind v4 (CSS-first — there is no `tailwind.config.js`; tokens live in `@theme inline` in `globals.css`), `lucide-react` for icons. `frontend/AGENTS.md` is written by `next dev` and warns that v16 APIs differ from training data — the bundled docs in `node_modules/next/dist/docs/` are authoritative. React 19's lint rules ban synchronous `setState` in an effect body and ref writes during render; both shaped the hook below, so don't "simplify" them back.
 
 **Layout (§9).** Three panes: History (fixed ~280px) · Analysis configuration (fluid ~40%) · Results (remaining). Panes are divided by a hairline `1px solid var(--border)`, never drop shadows. Below ~1024px the layout collapses to a single column with **History / Analyze / Results** as top-level tabs. The responsive fallback is a **first-pass requirement, not a fast-follow** — the spec flags cutting it under timeline pressure as a known risk, so build the layout primitives to serve both arrangements from the start.
 
@@ -153,11 +168,26 @@ Read §9–13 before writing any UI code; the notes below are the parts worth ha
 
 **Talking to the API (§13.4).** `lib/api.ts` wraps `POST /api/v1/analyze` and `GET /api/v1/features`; the tier/feature picker is built from the catalog endpoint, never a hardcoded feature list, so backend features stay the single source. Network/5xx → `error` state with input preserved and retry. A single feature reporting `available: false` must degrade to an "Unavailable" `MetricRow`, not take down the results pane.
 
+### Frontend implementation decisions
+
+Same rule as the backend list: these resolve real ambiguities, so read the reasoning before changing them.
+
+- **`useAnalysisState` is called in `app/page.tsx`, not `AnalysisFormPane`.** §11 names the form pane as the state owner, but React siblings cannot read a sibling's state — History and Results would have to duplicate it, which is the exact drift §11 is preventing. The form pane remains the only component that *mutates* the value; the other two only render from it.
+- **History is a `useSyncExternalStore` source, not React state synced by an effect** (`lib/history.ts` exports `subscribe`/`getSnapshot`/`getServerSnapshot`). `localStorage` genuinely is external state; this also keeps the server and hydrating client renders in agreement (both see an empty list) and makes a write in one tab update the others. The snapshot must stay cached — returning a fresh array per call would loop forever.
+- **`feature_names` is always sent, and `tiers` is derived from it.** The picker's selection *is* the request, so a half-selected tier never silently expands to the whole tier. This leans on the backend's "override, not filter" semantics.
+- **Results render by value *shape*, never by feature name.** `MetricRow` maps a scalar to a row and an object to a nested group, so `{label, score}` and `{a_given_b, b_given_a}` both work with no per-feature code. Value-derived styling follows the same rule: a string reading `positive`/`negative` gets the polarity colour, whatever feature produced it.
+- **`MAX_TEXT_CHARS = 20_000` in `lib/useAnalysisState.ts` is currently the only length cap in the system**, since `TEXTROPY_MAX_TEXT_CHARS` defaults to 0/disabled. Soft warning at 90%, hard block above.
+- **`ComparisonDiffView` re-derives its own alignment client-side** and caps at 1200 words per side (the LCS table is O(n·m)). It is illustrative only — the `lcs_length` metric shown alongside it comes from the API like every other value.
+- **The compare → single mode-switch confirmation uses `window.confirm`.** §11 lists no modal component, and inventing one to hold a single sentence seemed worse than the placeholder. Replace it when a modal exists.
+- **`frontend/CLAUDE.md` (`@AGENTS.md`) is generated by `next dev`,** not hand-written — leave both files in place; deleting them only recreates an uncommitted change.
+- **`next.config.ts` sets `output: "standalone"` for the Dockerfile's benefit.** The runtime stage copies `.next/standalone` *and* `.next/static` separately — the standalone bundle deliberately omits static assets, and skipping that second copy 404s every stylesheet and chunk while the page still returns 200. There is no `public/` directory today; add the matching `COPY` if one appears.
+- **`NEXT_PUBLIC_API_BASE_URL` is baked into the client bundle at build time**, so it is a Docker `--build-arg`, not a runtime `-e`. Retargeting a deployment means rebuilding the image, and the value must match the backend's `TEXTROPY_CORS_ORIGINS`. This is the one config knob that does not follow the backend's env-var pattern.
+
 ## Tech stack
 
 - Backend: FastAPI + Uvicorn via the `fastapi` CLI (`fastapi[standard-no-fastapi-cloud-cli]` — the `standard` extra minus the FastAPI Cloud deploy client), Pydantic v2, Python 3.11+. No gunicorn: the deployment is deliberately one worker, so its process manager bought nothing.
 - NLP/ML: spaCy (`en_core_web_sm`), transformers (DistilBERT SST-2, DistilGPT2), fastcoref, sentence-transformers (`all-MiniLM-L6-v2`), rapidfuzz, scikit-learn (TF-IDF), scipy (JS divergence), gensim/POT (WMD)
-- Frontend: Next.js (App Router) + TypeScript + Tailwind CSS; plain `fetch` against the API, no state management library (a `useAnalysisState` hook is the whole state layer). Inter / IBM Plex Sans for UI, IBM Plex Mono / JetBrains Mono for metrics, Lucide or Phosphor for icons
+- Frontend: Next.js 16 (App Router, Turbopack) + React 19.2 + TypeScript + Tailwind v4; plain `fetch` against the API, no state management library (a `useAnalysisState` hook is the whole state layer). Inter (UI) and IBM Plex Mono (metrics) via `next/font/google`, `lucide-react` for icons
 - Containerization: Docker + docker-compose (api, frontend only); Caddy as reverse proxy for automatic HTTPS
 
 ## Known MVP trade-offs (intentional, not oversights)

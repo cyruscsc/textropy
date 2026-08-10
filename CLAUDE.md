@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). `frontend/` is still an empty placeholder — no Next.js app yet, and no root `docker-compose.yml` (it needs the frontend service to be meaningful). The spec is the source of truth: follow its folder structure and architecture rather than inventing a different layout.
+The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). `frontend/` is still an empty placeholder — no Next.js app yet, and no root `docker-compose.yml` (it needs the frontend service to be meaningful).
+
+The spec is the source of truth for **both** tracks: §2–8 are the backend architecture, §9–13 are the frontend UI spec (layout, state machine, component breakdown, design system, behavioral requirements). Follow its folder structure, component split and design tokens rather than inventing a different layout — building the frontend means implementing §9–13, not designing from scratch.
 
 ## Commands
 
@@ -30,6 +32,10 @@ uv run ruff format app tests
 
 Tier 2/3 tests are marked `heavy` because they load transformer weights. Prefer
 `-m "not heavy"` while iterating on architecture or Tier 1.
+
+No frontend commands yet — `frontend/` is empty. When it is scaffolded, the API expects it
+on `http://localhost:3000` (the sole default in `settings.cors_origins`; override with
+`TEXTROPY_CORS_ORIGINS`). CORS allows only `GET`/`POST` and sends no credentials.
 
 ## What Textropy is
 
@@ -90,6 +96,7 @@ Resolutions of spec ambiguities and non-obvious choices — don't silently "fix"
 - **`feature_names` is an override, not a filter within `tiers`.** When supplied it selects exactly those features and `meta.tiers_computed` is derived from them. It addresses both registries — `features/registry.py` and `comparison/registry.py` each ignore names belonging to the other.
 - **`TEXTROPY_ENVIRONMENT=production` unmounts `/docs`, `/redoc` and `/openapi.json`** (`main.create_app` passes `None` for each URL, so they 404 rather than render empty). Default is `development`, where all three are served. The MVP has no auth or rate limiting, so a public Swagger UI is a convenient way to aim synchronous Tier 3 requests at the host; the frontend uses `/api/v1/features` for its tier picker and never needs `/docs`. `backend/Dockerfile` sets the production value by default.
 - **fastcoref is an optional extra pinned to `transformers<5`.** It reads transformers internals removed in v5 (`all_tied_weights_keys`). Without the extra, `coreference` returns `{"available": false, "reason": ...}` and everything else keeps working — see the degradation path in `services/analysis_service.run_signals` and the tests in `tests/test_optional_model_degradation.py`. Only optional models degrade; a missing required model still raises 503.
+- **`{"available": false, "reason": ...}` is the *only* per-feature failure shape today.** It is emitted by `analysis_service.run_features` when a required signal was marked unavailable — i.e. the optional-model path above. A feature computer that raises still fails the whole request. So the frontend's per-feature "Unavailable" row (spec §13.4) should key off `available === false` on a feature's value object, and treat request-level failure as the `error` state; the general per-feature `status`/`error` field the spec asks for is still an open gap (spec §14).
 
 ## Folder structure
 
@@ -111,7 +118,14 @@ textropy/
 │   ├── Dockerfile
 │   ├── pyproject.toml + uv.lock
 │   └── README.md
-├── frontend/                 # NOT YET BUILT — Next.js App Router + lib/history.ts
+├── frontend/                 # NOT YET BUILT — target shape below is spec §11, follow it
+│   ├── app/{layout.tsx, page.tsx, globals.css}   # page.tsx composes the 3 panes; globals.css holds the tokens
+│   ├── components/
+│   │   ├── history/{HistoryPane, HistoryListItem, NewAnalysisButton, ClearHistoryButton}.tsx
+│   │   ├── analysis-form/{AnalysisFormPane, ModeToggle, TierSelector, FeatureCheckbox, TextInput, AnalyzeButton}.tsx
+│   │   ├── results/{ResultsPane, ResultsEmptyState, ResultsSkeleton, TierResultSection, MetricRow, ComparisonDiffView, CopyResultsButton}.tsx
+│   │   └── shared/{Toast, ErrorBanner}.tsx
+│   └── lib/{history.ts, api.ts, types.ts, useAnalysisState.ts}
 └── docker-compose.yml        # NOT YET WRITTEN — api + frontend only, no db/cache/worker
 ```
 
@@ -120,14 +134,30 @@ textropy/
 Single endpoint drives both modes, synchronous end-to-end (Tier 3 included — no job queue in MVP):
 
 - `POST /api/v1/analyze` — body: `{ mode: "single"|"compare", texts: [...] (1 or 2 items), tiers: [1,2,3], feature_names: null | [...] }`. Response includes per-text `results[].features.tier{1,2,3}`, a `comparison` object (populated only in `compare` mode, mirroring the tiered shape), and `meta.elapsed_ms` / `meta.tiers_computed`. Full example payloads are in `specifications/specs_mvp.md` §6 — match that shape exactly.
-- `GET /api/v1/features` — machine-readable catalog (name, tier, scope, symmetric flag) driving the frontend's tier/feature picker.
+- `GET /api/v1/features` — machine-readable catalog (`name`, `tier`, `scope`, `symmetric`, plus a `requires` signal list) driving the frontend's tier/feature picker. The picker builds itself from this response; never hardcode the feature list in the frontend.
 - `GET /api/v1/health` — liveness/readiness; readiness must reflect whether `models_ml` singletons have finished loading, not just process-up.
+
+## Frontend (spec §9–13 — not yet built)
+
+Read §9–13 before writing any UI code; the notes below are the parts worth having in mind up front, not a replacement for the spec.
+
+**Layout (§9).** Three panes: History (fixed ~280px) · Analysis configuration (fluid ~40%) · Results (remaining). Panes are divided by a hairline `1px solid var(--border)`, never drop shadows. Below ~1024px the layout collapses to a single column with **History / Analyze / Results** as top-level tabs. The responsive fallback is a **first-pass requirement, not a fast-follow** — the spec flags cutting it under timeline pressure as a known risk, so build the layout primitives to serve both arrangements from the start.
+
+**State machine (§10).** One explicit state — `idle` → `editing` → `analyzing` → (`error`) — plus `viewing_history`, owned by `AnalysisFormPane` via the `useAnalysisState` hook. `HistoryPane` and `ResultsPane` are driven by that single value (selected entry id, current results payload); they must not keep independent copies, which is what keeps the three panes from drifting. `viewing_history` is fully read-only: mode toggle, textboxes and Analyze are all disabled. Editing a loaded entry is out of scope for the first pass, but when it lands it must fork into a fresh `idle`/`editing` state rather than mutate the stored entry.
+
+**Validation (§10, §13.2).** Analyze is enabled only when ≥1 feature is selected and every required textbox (1 for single, 2 for compare) is non-empty and under the client-side length cap. Cmd/Ctrl+Enter in a textbox triggers Analyze when valid. Live char/word counter under each box with a soft warning near the cap; confirm before a compare → single switch that would discard Text B; Tier 3 carries an inline "may take several seconds" note because it runs synchronously.
+
+**History (§13.1).** `lib/history.ts` owns `localStorage`: one entry per analysis, `{id, timestamp, mode, tiers, texts[], response}` — the full request *and* response, so viewing an entry never re-hits the API. Cap at ~50 entries and evict oldest; surface a toast when a write fails on quota. Items show a ~40-char snippet, mode badge, tier badges and a relative timestamp; actions are click-to-view, hover-reveal per-item delete, "Clear all", and "Duplicate as new" (pre-fills an editable `idle` state).
+
+**Design system (§12).** Minimalist editorial tool aesthetic — a linguist's notebook, not a SaaS dashboard. The one signature: **every numeric/metric value renders in monospace** (IBM Plex Mono / JetBrains Mono) against a sans UI face (Inter / IBM Plex Sans); `MetricRow` is a sans muted label plus a mono value. Colors are CSS variables in `globals.css` (`--bg` `#FAFAF9`, `--surface` `#FFFFFF`, `--border` `#E4E1DC`, `--ink` `#1C1B1A`, `--ink-muted` `#6B6862`, `--accent` `#3A5A73`, `--accent-soft` `#E8EEF2`, `--positive` `#3F7857`, `--negative` `#A14C43`) — use the tokens, don't hardcode hexes in components. 4px radius everywhere; 4px spacing base (4/8/12/16/24/32, pane padding 24px); flat by default with `shadow-sm` only for dropdowns/skeletons and `shadow-md` only for toasts/modals; 120–150ms ease-out transitions and no page-load or scroll animation. Outline icons (Lucide/Phosphor, 16–20px, 1.5px stroke) used sparingly — the mode toggle and tier labels stay text-only. Visible 2px `--accent` focus outlines on every interactive element are non-negotiable.
+
+**Talking to the API (§13.4).** `lib/api.ts` wraps `POST /api/v1/analyze` and `GET /api/v1/features`; the tier/feature picker is built from the catalog endpoint, never a hardcoded feature list, so backend features stay the single source. Network/5xx → `error` state with input preserved and retry. A single feature reporting `available: false` must degrade to an "Unavailable" `MetricRow`, not take down the results pane.
 
 ## Tech stack
 
 - Backend: FastAPI + Uvicorn via the `fastapi` CLI (`fastapi[standard-no-fastapi-cloud-cli]` — the `standard` extra minus the FastAPI Cloud deploy client), Pydantic v2, Python 3.11+. No gunicorn: the deployment is deliberately one worker, so its process manager bought nothing.
 - NLP/ML: spaCy (`en_core_web_sm`), transformers (DistilBERT SST-2, DistilGPT2), fastcoref, sentence-transformers (`all-MiniLM-L6-v2`), rapidfuzz, scikit-learn (TF-IDF), scipy (JS divergence), gensim/POT (WMD)
-- Frontend: Next.js (App Router) + TypeScript + Tailwind CSS; plain `fetch` against the API, no state management library
+- Frontend: Next.js (App Router) + TypeScript + Tailwind CSS; plain `fetch` against the API, no state management library (a `useAnalysisState` hook is the whole state layer). Inter / IBM Plex Sans for UI, IBM Plex Mono / JetBrains Mono for metrics, Lucide or Phosphor for icons
 - Containerization: Docker + docker-compose (api, frontend only); Caddy as reverse proxy for automatic HTTPS
 
 ## Known MVP trade-offs (intentional, not oversights)
@@ -138,5 +168,6 @@ These are deferred to keep the MVP a single Docker service with no external depe
 - Tier 3 runs synchronously in-request (deferred fix: Celery/RQ async job + polling endpoint)
 - No auth/rate limiting (deferred fix: API key + `slowapi`)
 - History is client-only, lost if browser storage is cleared
-- No input length cap enforced yet (deferred fix: tier-dependent max-length validation)
+- No input length cap enforced yet server-side — the `TEXTROPY_MAX_TEXT_CHARS` hook exists but defaults to `0` (off); the frontend is meant to enforce a soft warning + hard block client-side ahead of it (deferred fix: tier-dependent max-length validation)
 - Models are loaded per worker process, so multiple workers multiply RAM (mitigation: single-worker + async concurrency, or a shared model server)
+- No general per-feature `status`/`error` in the response, so the frontend can only distinguish "feature failed" from "feature absent" for the optional-model degradation path (deferred fix: extend `AnalyzeResponse` — see the implementation decision above)

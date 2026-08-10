@@ -6,6 +6,8 @@ Textropy is a web app for linguistic text analysis, supporting **single-text** a
 
 **Explicitly out of scope for MVP:** persistence/database, server-side caching (Redis), background job queue (Celery/RQ), authentication, rate limiting. History is stored client-side only (browser `localStorage`).
 
+This document covers both the **backend architecture** (Sections 2–8) and the **frontend UI specification** (Sections 9–13), serving as the shared reference for both tracks of MVP development.
+
 ---
 
 ## 2. Architectural Principle: Multi-Pass, No Persistence
@@ -226,7 +228,177 @@ Liveness/readiness; readiness reflects whether `models_ml` singletons have finis
 
 ---
 
-## 9. Known MVP Limitations (Accepted Trade-offs)
+## 9. UI Layout — Three-Pane Structure
+
+```
+┌────────────────┬────────────────────────────────┬──────────────────────────┐
+│  HISTORY       │  ANALYSIS CONFIGURATION        │  RESULTS                 │
+│  (left)        │  (center)                      │  (right)                 │
+│                │                                │                          │
+│  + New Analysis│  [Single text | Compare]       │  (empty state until      │
+│                │                                │   an analysis is run     │
+│  ─ Today ─     │  ▸ Tier 1  [expand for         │   or loaded)             │
+│  • "The quick..│    individual features]        │                          │
+│    2h ago      │  ▸ Tier 2                      │  Tier 1 results          │
+│    single·T1,T2│  ▸ Tier 3 ⚠ may take longer    │  Tier 2 results          │
+│                │                                │  Tier 3 results          │
+│  • "Lorem ip.. │  ┌──────────────────────────┐  │                          │
+│    vs "Dolor.. │  │ Text A textbox           │  │  (compare mode:          │
+│    1d ago      │  └──────────────────────────┘  │   Text A / Text B        │
+│    compare·T1  │  ┌──────────────────────────┐  │   side-by-side, then     │
+│                │  │ Text B textbox (compare) │  │   comparison metrics     │
+│  [Clear all]   │  └──────────────────────────┘  │   below)                 │
+│                │                                │                          │
+│                │          [ Analyze ]           │  [Copy results]          │
+└────────────────┴────────────────────────────────┴──────────────────────────┘
+```
+
+- Fixed-width left pane (~280px), center pane fluid (~40%), right pane fluid (remaining space). Hairline `1px solid var(--border)` divides panes — no drop shadows between them.
+- Below ~1024px viewport width, the layout collapses to a single-column tabbed view: **History / Analyze / Results** as top-level tabs, since three fixed columns aren't viable on tablet/mobile. This is a hard requirement, not a nice-to-have — plan the layout primitives (see Section 12) to support both from the start.
+
+---
+
+## 10. UI State Machine
+
+The center and right panes' behavior is driven by one explicit state, not just an implicit "history loaded?" flag:
+
+| State | Trigger | Mode toggle | Textbox(es) | Analyze button | Right pane |
+|---|---|---|---|---|---|
+| `idle` (new analysis) | App load, or "New Analysis" clicked | Active | Editable, empty | Enabled once valid input + ≥1 tier selected | Empty state |
+| `editing` | User typing / selecting tiers | Active | Editable | Enabled/disabled per validation | Empty state |
+| `analyzing` | Analyze clicked | Disabled | Disabled (read-only during request) | Disabled, shows spinner | Loading skeleton |
+| `error` | Request failed | Active | Editable (input preserved) | Enabled (retry) | Error message + retry action |
+| `viewing_history` | History item clicked | **Disabled**, shows original mode | **View-only**, shows original text(s) | **Disabled** | Populated with that entry's results |
+
+**Note on edit-after-load:** if a future iteration allows editing text loaded from history, that edit should transition the app to a fresh `idle`/`editing` state (effectively "fork as new"), not mutate the historical entry in place. Out of scope for first pass, but the state model above is designed to accommodate it without rework.
+
+Validation rule gating the Analyze button in `idle`/`editing`: at least one feature (from any tier) selected, and all required textboxes (one for single, two for compare) non-empty and under the max length (Section 13.4).
+
+---
+
+## 11. Component Breakdown
+
+```
+frontend/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx                     # composes the three panes
+│   └── globals.css                  # design tokens (CSS variables)
+│
+├── components/
+│   ├── history/
+│   │   ├── HistoryPane.tsx
+│   │   ├── HistoryListItem.tsx      # snippet, mode badge, tier badges, relative time
+│   │   ├── NewAnalysisButton.tsx
+│   │   └── ClearHistoryButton.tsx
+│   │
+│   ├── analysis-form/
+│   │   ├── AnalysisFormPane.tsx     # owns app state machine (Section 10)
+│   │   ├── ModeToggle.tsx           # segmented control: Single text / Compare
+│   │   ├── TierSelector.tsx         # expandable tier → feature checkboxes
+│   │   ├── FeatureCheckbox.tsx
+│   │   ├── TextInput.tsx            # shared editable/view-only textbox, char counter
+│   │   └── AnalyzeButton.tsx
+│   │
+│   ├── results/
+│   │   ├── ResultsPane.tsx
+│   │   ├── ResultsEmptyState.tsx
+│   │   ├── ResultsSkeleton.tsx      # loading state during `analyzing`
+│   │   ├── TierResultSection.tsx    # collapsible, one per tier
+│   │   ├── MetricRow.tsx            # label (sans) + value (mono) pairing
+│   │   ├── ComparisonDiffView.tsx   # word/char-level diff for Tier 1 compare
+│   │   └── CopyResultsButton.tsx
+│   │
+│   └── shared/
+│       ├── Toast.tsx                # quota/error notifications
+│       └── ErrorBanner.tsx
+│
+├── lib/
+│   ├── history.ts                   # localStorage read/write/evict wrapper
+│   ├── api.ts                       # fetch wrapper for POST /analyze, GET /features
+│   ├── types.ts                     # shared request/response TypeScript types
+│   └── useAnalysisState.ts          # state machine hook (Section 10)
+│
+└── ...
+```
+
+`AnalysisFormPane` is the single owner of the state-machine value; `HistoryPane` and `ResultsPane` are driven by it (selected history entry ID, current results payload) rather than each maintaining independent state — avoids the three panes drifting out of sync.
+
+---
+
+## 12. Design System
+
+### 12.1 Direction
+Minimalist, editorial-adjacent tool aesthetic — a linguist's notebook rather than a SaaS dashboard. The one deliberate signature: **all numeric/metric output uses a monospace face** against a sans-serif UI, functionally justified by tabular alignment of scannable numbers and thematically apt for a text-measurement tool.
+
+### 12.2 Color
+
+| Token | Hex | Use |
+|---|---|---|
+| `--bg` | `#FAFAF9` | App background |
+| `--surface` | `#FFFFFF` | Pane/card backgrounds |
+| `--border` | `#E4E1DC` | Pane dividers, input borders |
+| `--ink` | `#1C1B1A` | Primary text |
+| `--ink-muted` | `#6B6862` | Secondary text, labels, metadata |
+| `--accent` | `#3A5A73` | Primary actions, active/selected states |
+| `--accent-soft` | `#E8EEF2` | Accent backgrounds (selected row, active tab) |
+| `--positive` | `#3F7857` | Success states, positive sentiment |
+| `--negative` | `#A14C43` | Errors, negative sentiment |
+
+### 12.3 Typography
+
+| Role | Face | Notes |
+|---|---|---|
+| UI / body | Inter or IBM Plex Sans | Headings use the same face at heavier weight — no separate display face |
+| Metrics / data / code | IBM Plex Mono or JetBrains Mono | All numeric feature values, tier labels, JSON export view |
+
+Scale: `text-xs` 12px (metadata/timestamps) · `text-sm` 14px (body/labels) · `text-base` 16px (textbox content) · `text-lg` 18px/600 (pane headers).
+
+### 12.4 Radius, Icons, Spacing, Elevation, Motion
+
+- **Radius:** 4px everywhere (buttons, inputs, cards, badges) — consistent, not zero, not soft-rounded.
+- **Icons:** Lucide or Phosphor, outline, 16–20px, 1.5px stroke. Used sparingly (history pane actions, expand chevrons); mode toggle and tier labels stay text-only.
+- **Spacing:** 4px base unit, scale 4/8/12/16/24/32. Pane padding 24px; between form sections 24px; within a checkbox list 8px.
+- **Elevation:** flat by default; `shadow-sm` for dropdowns/skeletons, `shadow-md` for toasts/modals only.
+- **Motion:** 120–150ms ease-out on hover/active/state transitions; 150ms height transition for tier expand/collapse; subtle skeleton-pulse in results pane during Tier 3 computation. No page-load or scroll animation.
+
+### 12.5 Key Component Treatments
+
+- **Buttons:** solid `--accent` fill (primary/Analyze), outline/ghost (secondary/New Analysis, Clear History). Disabled: `--border` background, `--ink-muted` text.
+- **Checkboxes:** square, 4px radius, `--accent` when checked.
+- **History list items:** no card border; 2px `--accent` left bar + `--accent-soft` background when selected/hovered.
+- **Metric display:** label in sans (`--ink-muted`, `text-sm`) + value in mono (`--ink`, `text-base`, medium weight).
+- **Focus states:** visible 2px `--accent` outline on all interactive elements (non-negotiable — keyboard support, see Section 13.3).
+
+---
+
+## 13. Frontend Behavioral Considerations
+
+### 13.1 History (localStorage)
+- Storage key structure: one entry per analysis — `{id, timestamp, mode, tiers, texts[], response}`.
+- **Cap history length** (e.g., 50 most recent entries); evict oldest on overflow. Show a toast if a `localStorage` write fails due to quota.
+- History list item displays: text snippet (~40 chars), mode badge, tier badges, relative timestamp.
+- Actions: click to view (Section 10 `viewing_history` state), per-item delete (hover-reveal), "Clear all," and "Duplicate as new" (pre-fills an editable `idle` state with that entry's text/tiers for re-run).
+
+### 13.2 Validation & Feedback
+- Live character/word counter under each textbox; soft warning near the max-length threshold (Section 13.4).
+- Analyze button disabled until validation passes (Section 10).
+- Mode-switch confirmation if switching from compare → single would discard entered text in the second textbox.
+- Tier 3 selection shows an inline note ("may take several seconds") since it runs synchronously with no job queue (per Section 9 limitations).
+
+### 13.3 Accessibility & Keyboard
+- Cmd/Ctrl+Enter in a focused textbox triggers Analyze (when valid).
+- Visible focus outlines on all interactive elements.
+- Responsive collapse to tabbed layout below ~1024px (Section 9).
+
+### 13.4 Error & Partial-Failure Handling
+- Request-level failure (network/5xx): `error` state (Section 10), input preserved, retry available.
+- Feature-level failure (e.g., coreference fails on very short text): affected `MetricRow` renders "Unavailable" rather than failing the whole results pane. Requires the backend response to carry a per-feature `status`/`error` field (see Section 6 API response — to be extended when this is implemented) rather than only a request-level success/failure.
+- Input length cap: enforced client-side (soft warning + hard block) ahead of the server-side validation noted in Section 9's limitations table.
+
+---
+
+## 14. Known MVP Limitations (Accepted Trade-offs)
 
 | Limitation | Consequence | Deferred Fix |
 |---|---|---|
@@ -236,5 +408,7 @@ Liveness/readiness; readiness reflects whether `models_ml` singletons have finis
 | History is client-only | Lost if browser storage is cleared; not shareable across devices | Optional server-side persistence |
 | No input length cap enforced yet | Large inputs risk high latency/memory spikes | Tier-dependent max-length validation |
 | Models loaded per Gunicorn worker process | Multiple workers multiply RAM usage | Consider single-worker + async concurrency, or shared model server |
+| No per-feature status in API response | Frontend can't yet distinguish "feature failed" from "feature absent" (Section 13.4) | Extend `AnalyzeResponse` schema with per-feature `status`/`error` |
+| Responsive tabbed fallback (Section 9) not yet built | If deferred, three-pane layout is unusable below ~1024px | Required in the first UI pass, not a fast-follow — flagged here as a risk if timeline pressure tempts cutting it |
 
-These are intentionally deferred — not oversights — to keep the MVP's operational footprint minimal (single Docker service, no external dependencies) while preserving the multi-pass architecture so the upgrade path to the full design (Section referenced in prior discussion) is additive rather than a rewrite.
+These are intentionally deferred — not oversights — to keep the MVP's operational footprint minimal (single Docker service, no external dependencies) while preserving the multi-pass architecture so the upgrade path to the full design (Section referenced in prior discussion) is additive rather than a rewrite. Sections 9–13 extend this same reference to the frontend, so backend and UI development can proceed against one shared source of truth.

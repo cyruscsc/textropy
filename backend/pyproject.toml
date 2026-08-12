@@ -45,8 +45,20 @@ dev = [
     "ruff>=0.7",
 ]
 
+# PyPI's linux torch wheels are the CUDA build: they pull cuda-bindings plus ~15 nvidia-*
+# packages, several GB of GPU libraries into a deployment that runs device="cpu" everywhere
+# on a GPU-less VPS. This index carries the CPU-only wheels instead. `explicit = true` means
+# nothing is drawn from it unless a [tool.uv.sources] entry below asks for it.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+# Linux only: macOS wheels on PyPI are already CPU-only, so local dev on a Mac keeps
+# resolving exactly as before.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,88 @@
+# Production deployment (spec §8): two services, no db / cache / worker.
+#
+# Images are built from this checkout on the VPS itself:
+#
+#   git clone git@github.com:cyruscsc/textropy.git && cd textropy
+#   cp .env.example .env && $EDITOR .env      # set PUBLIC_API_URL + FRONTEND_ORIGIN
+#   docker compose up -d --build
+#
+# and to ship a new commit:
+#
+#   git pull && docker compose up -d --build
+#
+# `--build` is not optional. The frontend inlines NEXT_PUBLIC_API_BASE_URL into the
+# client bundle at *build* time, so a changed .env only reaches the browser through a
+# rebuild — `docker compose up -d` alone would silently keep serving the old URL.
+#
+# There is no reverse proxy here: both services publish ports directly and TLS is
+# somebody else's job. The two URLs below must therefore be whatever the *browser*
+# will use, not container names — the browser, not the frontend server, calls the API.
+
+name: textropy
+
+services:
+  api:
+    build:
+      context: ./backend
+    image: textropy-api:local
+    restart: unless-stopped
+    ports:
+      # Bound to BIND_ADDRESS so a host running its own proxy can pin these to 127.0.0.1.
+      - "${BIND_ADDRESS:-0.0.0.0}:${API_PORT:-8000}:8000"
+    environment:
+      # production unmounts /docs, /redoc and /openapi.json. The MVP has no auth or rate
+      # limiting, so a public Swagger UI is a loaded gun aimed at the host's CPU.
+      TEXTROPY_ENVIRONMENT: production
+      # pydantic-settings parses list-typed fields as JSON, hence the literal brackets.
+      # This has to match the origin the browser loads the UI from, or every request is
+      # blocked by CORS.
+      TEXTROPY_CORS_ORIGINS: '["${FRONTEND_ORIGIN:?set FRONTEND_ORIGIN in .env}"]'
+      TEXTROPY_MODEL_LOADING: ${MODEL_LOADING:-eager}
+      # JSON again. [1] preloads spaCy only (~200MB) and leaves Tier 2/3 to load on first
+      # use; [1,2,3] trades ~90s of startup for a fast first Tier 3 request at ~2GB RSS.
+      TEXTROPY_EAGER_TIERS: ${EAGER_TIERS:-[1]}
+      TEXTROPY_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # 0 disables the cap. The frontend hard-blocks at 20000 chars client-side; setting
+      # the same number here closes the "curl straight at the API" hole.
+      TEXTROPY_MAX_TEXT_CHARS: ${MAX_TEXT_CHARS:-20000}
+      TEXTROPY_TORCH_NUM_THREADS: ${TORCH_NUM_THREADS:-0}
+    # Healthcheck comes from the image: it polls /api/v1/health and only reports healthy
+    # once the models this deployment preloads are actually resident.
+    deploy:
+      resources:
+        limits:
+          # Enough headroom for all three tiers (~1.5-2GB resident). Lower it only if
+          # EAGER_TIERS stays at [1] and you accept an OOM kill mid Tier 3 request.
+          memory: ${API_MEMORY_LIMIT:-3g}
+    # Tier 3 runs synchronously in-request, so give an in-flight analysis time to finish.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Build-time only, and unreachable via `docker run -e` afterwards. Must be the
+        # public URL of the api service above, as seen from the visitor's browser.
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL in .env}
+    image: textropy-frontend:local
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
+    # No depends_on: the Next server never calls the API — every request is client-side
+    # from the browser — so waiting on api's healthcheck would only delay startup.
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-512m}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+# No volumes: the MVP is stateless server-side (history lives in the browser's
+# localStorage) and the HF weights are baked into the api image at build time.

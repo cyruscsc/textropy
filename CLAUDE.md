@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). The **frontend is scaffolded and working end-to-end** — Next.js 16 (App Router) + React 19 + Tailwind v4, all of §11's components and both layouts (three-pane and the sub-1024px tabbed fallback). Still missing: a root `docker-compose.yml`, and any frontend tests.
+The **backend is implemented** against `specifications/specs_mvp.md` (all 20 features across both modes and three tiers). The **frontend is scaffolded and working end-to-end** — Next.js 16 (App Router) + React 19 + Tailwind v4, all of §11's components and both layouts (three-pane and the sub-1024px tabbed fallback). A root `compose.yml` deploys both services. Still missing: any frontend tests.
 
 The spec is the source of truth for **both** tracks: §2–8 are the backend architecture, §9–13 are the frontend UI spec (layout, state machine, component breakdown, design system, behavioral requirements). Follow its folder structure, component split and design tokens rather than inventing a different layout.
 
@@ -139,7 +139,9 @@ textropy/
 │   ├── lib/{api.ts, history.ts, types.ts, useAnalysisState.ts, format.ts}   # format.ts is additive: label/number/relative-time helpers
 │   ├── Dockerfile            # 3-stage → standalone server on node:24-alpine, uid 10001
 │   └── README.md
-└── docker-compose.yml        # NOT YET WRITTEN — api + frontend only, no db/cache/worker
+├── compose.yml               # api + frontend only, no db/cache/worker (spec §8 calls it
+│                             # docker-compose.yml; compose.yml is the Compose Spec name)
+└── .env.example              # copy to .env on the VPS — compose interpolation only
 ```
 
 ## API contract
@@ -188,7 +190,19 @@ Same rule as the backend list: these resolve real ambiguities, so read the reaso
 - Backend: FastAPI + Uvicorn via the `fastapi` CLI (`fastapi[standard-no-fastapi-cloud-cli]` — the `standard` extra minus the FastAPI Cloud deploy client), Pydantic v2, Python 3.11+. No gunicorn: the deployment is deliberately one worker, so its process manager bought nothing.
 - NLP/ML: spaCy (`en_core_web_sm`), transformers (DistilBERT SST-2, DistilGPT2), fastcoref, sentence-transformers (`all-MiniLM-L6-v2`), rapidfuzz, scikit-learn (TF-IDF), scipy (JS divergence), gensim/POT (WMD)
 - Frontend: Next.js 16 (App Router, Turbopack) + React 19.2 + TypeScript + Tailwind v4; plain `fetch` against the API, no state management library (a `useAnalysisState` hook is the whole state layer). Inter (UI) and IBM Plex Mono (metrics) via `next/font/google`, `lucide-react` for icons
-- Containerization: Docker + docker-compose (api, frontend only); Caddy as reverse proxy for automatic HTTPS
+- Containerization: Docker + Compose V2 (api, frontend only). Spec §8 assumes Caddy in front for automatic HTTPS; `compose.yml` does not ship it — see Deployment below
+
+## Deployment (`compose.yml`)
+
+`DEPLOYMENT.md` is the step-by-step VPS runbook (nginx + certbot on `textropy.dev`, single origin with `/api/` proxied to the backend). The notes below are the reasoning behind it.
+
+Production runs on a VPS from a git checkout of this repo — `git pull && docker compose up -d --build`. Both images are built on the host; nothing is pushed to a registry and there is no CI. Settings come from a root `.env` (gitignored, template in `.env.example`) that Compose interpolates into the file; the backend still receives everything as `TEXTROPY_*` in `environment:`, so `.env` is never read by the app itself.
+
+- **`--build` is part of the deploy command, not an optimisation.** `NEXT_PUBLIC_API_BASE_URL` is inlined into the client bundle at build time, so editing `.env` and running plain `up -d` keeps serving the old API URL with no error anywhere.
+- **No reverse proxy in the file.** Both services publish host ports directly (`BIND_ADDRESS:PORT:PORT`) and TLS is out of scope for the compose file. `BIND_ADDRESS=127.0.0.1` is the hook for a proxy already living on the host — spec §8's Caddy is compatible with that, just not bundled.
+- **`PUBLIC_API_URL` and `FRONTEND_ORIGIN` are browser-facing addresses, never service names.** Every API call is client-side `fetch` from the visitor's browser; the Next server never talks to `api`. That is also why `frontend` has no `depends_on` — gating it on the api healthcheck (up to 90s while models load) would delay startup for a dependency that does not exist.
+- **List-typed settings must be JSON in the environment.** pydantic-settings parses `cors_origins` and `eager_tiers` as JSON, hence `'["${FRONTEND_ORIGIN}"]'` and `[1]`, not comma-separated strings.
+- **`MAX_TEXT_CHARS` defaults to 20000 here**, matching the frontend's client-side hard block — the app default is still `0`/off, so the cap exists only in deployment. It is what stops a direct `curl` from bypassing the UI's limit.
 
 ## Known MVP trade-offs (intentional, not oversights)
 

@@ -154,6 +154,10 @@ curl -sI https://textropy.dev
 curl -sI https://textropy.dev/docs      # expect 404 — production unmounts the docs
 ```
 
+In the health payload, every entry under `models` should read `loaded`. `coref` is the one
+model allowed to report `error` without holding readiness down — it means the image was
+built without the `coref` extra, and only the Tier 2 `coreference` feature degrades.
+
 Then load it in a browser, run a Tier 1 analysis, and check the Network tab shows
 `POST https://textropy.dev/api/v1/analyze` succeeding. If the UI renders but every
 analysis fails, the bundle was built with the wrong `PUBLIC_API_URL` — fix `.env` and

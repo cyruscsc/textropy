@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,20 @@ from app.core.logging import configure_logging, get_logger
 from app.models_ml.model_registry import get_model_registry
 
 logger = get_logger(__name__)
+
+
+def _app_version() -> str:
+    """Read the version from installed package metadata.
+
+    pyproject's `[project] version` is the single source of truth for the backend, so
+    OpenAPI cannot drift from the released version the way a second literal here would.
+    """
+    try:
+        return package_version("textropy-backend")
+    except PackageNotFoundError:
+        # Source tree with the project not installed (e.g. bare `PYTHONPATH=. uvicorn`).
+        # Both `uv sync` and the Dockerfile install it, so this is a dev-only fallback.
+        return "0.0.0+unknown"
 
 
 @asynccontextmanager
@@ -44,7 +60,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version=_app_version(),
         summary="Stateless multi-pass linguistic text analysis",
         lifespan=lifespan,
         # Passing None unmounts the route entirely — a 404, not an empty page.

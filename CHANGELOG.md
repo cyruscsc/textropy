@@ -11,6 +11,80 @@ git tag `vX.Y.Z` marks the pair.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-16
+
+Tier 1 grows from 5 features to 35, and parser-derived values now reach the reader marked as
+approximate. Purely additive: no feature changed its value or its shape, and no request or
+response key was removed.
+
+### Added
+
+#### Tier 1 features
+
+`specifications/specs_features.md` is now the source of truth for linguistic features, and
+every feature it defines is implemented. Thirty new computers, all reading the same
+`spacy.doc` the existing five read, so selecting all of Tier 1 still costs one parse.
+
+- Lexical (`features/tier1/lexical.py`) — `lemma_count`, `unique_lemma_count`,
+  `content_word_density`, `function_word_density`.
+- Clause (`features/tier1/clause.py`) — `infinitive_clause_count`, `noun_clause_count`,
+  `adjective_clause_count`, `adverbial_clause_count`.
+- Sentence (`features/tier1/sentence.py`) — `sentence_count`; count and density for each of
+  `simple_sentence`, `compound_sentence`, `complex_sentence`, `compound_complex_sentence`;
+  `sentence_length_mean`, `sentence_length_stdev`.
+- Punctuation (`features/tier1/punctuation.py`) — `punctuation_count`,
+  `internal_punctuation_count`, `internal_punctuation_ratio`, `terminal_punctuation_count`,
+  `terminal_punctuation_ratio`.
+- Complexity (`features/tier1/complexity.py`) — mean and standard deviation of each of mean
+  dependency distance (`mdd_mean`, `mdd_stdev`), dependency tree depth
+  (`dependency_depth_mean`, `dependency_depth_stdev`) and phrasal elaboration
+  (`phrasal_elaboration_mean`, `phrasal_elaboration_stdev`).
+
+#### Approximation disclosure
+
+- Feature catalog entries carry an `approximate` flag, set by the twenty-one computers that
+  read dependency-parse structure rather than tags or surface forms. It is a property of the
+  feature, so only the backend can state it.
+- The results pane marks those values with a `≈` footnote, built from the catalog rather than
+  a hand-maintained list of feature names — a parser-derived feature added later arrives in
+  the UI already carrying its caveat. When the catalog cannot be loaded the pane says the
+  markers are missing instead of presenting the values bare.
+
+This satisfies `specs_features.md` §11.1, the disclosure obligation attached to Decision 5's
+choice of `en_core_web_sm`.
+
+#### Shared conventions
+
+- `features/tier1/stats.py` — one definition of ratio (`0.0`, never `null`, on a zero
+  denominator), mean, and population standard deviation (`ddof=0`), rounded to 4 decimal
+  places at the point of return and never on an intermediate. Two feature groups can no
+  longer quietly disagree about what a ratio does with an empty text.
+- `signals/spacy_extractor.content_sentences` — one definition of "a sentence" (a span
+  holding at least one word token, so a punctuation-only span such as `"..."` does not count),
+  shared by the sentence and complexity groups so their per-sentence series describe the same
+  population.
+
+#### Documentation
+
+- `specifications/specs_features.md` — every implemented and planned linguistic feature, with
+  §11 recording five accepted decisions.
+- `backend/ARCHITECTURE.md` and `frontend/ARCHITECTURE.md` — pipeline internals and UI
+  internals respectively, alongside the orientation-level READMEs.
+
+### Changed
+
+- `ttr` is computed through the shared `stats.ratio` helper. Output is identical, including
+  its `0.0` for an empty text; it is noted only because it is the sole edit to a feature that
+  shipped in 0.1.0.
+
+### Upgrading
+
+Deploy both services together, as the versioning policy above requires. A 0.2.0 frontend
+against a 0.1.0 backend loses every approximation marker silently, because the flag arrives
+from the catalog rather than the bundle; a 0.1.0 frontend against a 0.2.0 backend ignores the
+new field and renders the new features unmarked. Nothing else in the contract moved, so no
+stored history entry or client is invalidated.
+
 ## [0.1.0] — 2026-08-12
 
 First release: the MVP defined by `specifications/specs_mvp.md`, deployable to a single VPS.
@@ -95,5 +169,6 @@ and lost if browser storage is cleared, server-side input length capping is off 
 models are loaded per worker process, and the response carries no general per-feature
 `status`/`error` field. The frontend has no test suite yet.
 
-[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cyruscsc/textropy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cyruscsc/textropy/releases/tag/v0.1.0

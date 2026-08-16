@@ -38,10 +38,10 @@ curl -s localhost:8000/api/v1/analyze -H 'content-type: application/json' \
 
 ## The problem this architecture solves
 
-Most of the 28 features share underlying work. All thirteen Tier 1 features want a spaCy parse.
+Most of the 39 features share underlying work. All 24 Tier 1 features want a spaCy parse.
 Perplexity and mean surprisal both want DistilGPT2 token log-probabilities. Cohesion and
 comparison-mode semantic similarity both want sentence embeddings. A naive implementation
-where each feature extracts what it needs would parse the same text thirteen times and run
+where each feature extracts what it needs would parse the same text 24 times and run
 DistilGPT2 twice per request.
 
 The usual fix is a cache. The MVP deliberately has none — no Redis, and no in-process memo
@@ -128,10 +128,10 @@ time from whatever was selected.
 4. **Run** each extractor once, storing results on the context.
 5. **Run** the feature computers, which only read.
 
-Worked example — `{"tiers": [1, 3]}` selects fifteen computers:
+Worked example — `{"tiers": [1, 3]}` selects 26 computers:
 
 ```
-all 13 Tier 1 features                        requires  {spacy.doc}
+all 24 Tier 1 features                        requires  {spacy.doc}
 perplexity                                    requires  {lm.token_logprobs}
 mean_surprisal                                requires  {lm.token_logprobs, spacy.doc,
                                                          alignment.lm_to_spacy}
@@ -145,9 +145,10 @@ resolve_order (topological) ─────────────────�
   3. alignment.lm_to_spacy  ← depends on both, so it must come last
 ```
 
-One parse and one DistilGPT2 pass, for fifteen features. Eight Tier 1 features (the lemma
-pair, the density pair, and the four clause counts) were added after this document was first
-written, and the extractor count did not move — which is the property the design buys.
+One parse and one DistilGPT2 pass, for 26 features. Nineteen Tier 1 features have been added
+since this document was first written — the lemma pair, the density pair, four clause counts
+and eleven sentence features — and the extractor count never moved. That is the property the
+design buys.
 
 Step 3 also means a computer can depend on a *derived* signal without knowing what that
 signal is built from: `mean_surprisal` asks for `alignment.lm_to_spacy` and the resolver works
@@ -162,21 +163,21 @@ topological order, cycle detection — so they are checked, not just documented.
 
 ### Single-text (`app/features/`)
 
+**Tier 1** — 24 features across three modules, every one reading `spacy.doc` and nothing else.
+Per-feature definitions, edge cases and the reasoning behind them live in
+[`../specifications/specs_features.md`](../specifications/specs_features.md) §2–4, which is the
+source of truth for linguistic features; this table would only drift from it.
+
+| Module | Features | Measures |
+|---|---|---|
+| `tier1/lexical.py` | 9 | word / lemma / content / function counts, the two densities, TTR |
+| `tier1/clause.py` | 4 | infinitive, noun, adjective and adverbial clause counts |
+| `tier1/sentence.py` | 11 | sentence count, four sentence classes with densities, length mean + stdev |
+
+**Tiers 2 and 3** each draw a different signal, so they are worth listing individually:
+
 | Tier | Feature | Reads | Notes |
 |---|---|---|---|
-| 1 | `word_count` | `spacy.doc` | punctuation and whitespace excluded |
-| 1 | `unique_word_count` | `spacy.doc` | distinct lowercased forms |
-| 1 | `lemma_count` | `spacy.doc` | word tokens carrying a lemma — equals `word_count` on ordinary prose |
-| 1 | `unique_lemma_count` | `spacy.doc` | distinct lemmas; `<= unique_word_count`, since inflection collapses |
-| 1 | `content_word_count` | `spacy.doc` | POS in `{NOUN, PROPN, VERB, ADJ, ADV}` |
-| 1 | `function_word_count` | `spacy.doc` | the complement of the above |
-| 1 | `content_word_density` | `spacy.doc` | `content_word_count / word_count`; lexical density |
-| 1 | `function_word_density` | `spacy.doc` | `function_word_count / word_count`; sums to 1 with the above |
-| 1 | `ttr` | `spacy.doc` | type-token ratio = unique / total |
-| 1 | `infinitive_clause_count` | `spacy.doc` | `VB` verb with a `TO` aux child |
-| 1 | `noun_clause_count` | `spacy.doc` | dep ∈ `{ccomp, csubj, csubjpass, pcomp}` |
-| 1 | `adjective_clause_count` | `spacy.doc` | dep ∈ `{relcl, acl}` |
-| 1 | `adverbial_clause_count` | `spacy.doc` | dep `advcl` |
 | 2 | `sentiment` | `sentiment.document` | `{label, score}` from DistilBERT SST-2 |
 | 2 | `coreference` | `coref.clusters` | `{chain_count}` from fastcoref |
 | 2 | `cohesion` | `embedding.sentence_vectors` | mean cosine similarity of adjacent sentences |

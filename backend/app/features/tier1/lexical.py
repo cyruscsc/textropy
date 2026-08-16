@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.features.base import FeatureComputer
+from app.features.tier1.stats import ratio
 from app.pipeline.context import AnalysisContext
 from app.signals.base import SPACY_DOC
 from app.signals.spacy_extractor import CONTENT_POS, word_tokens
@@ -27,20 +28,6 @@ def lemma_forms(doc: Any) -> list[str]:
     """
     lemmas = (token.lemma_.lower() for token in word_tokens(doc))
     return [lemma for lemma in lemmas if lemma]
-
-
-def _density(matching: int, total: int) -> float:
-    """Share of word tokens in a class, rounded like `ttr`.
-
-    A text with no word tokens gives `0.0`, not null. The API rejects blank text, so this
-    is only reachable via punctuation-only input ("..."), and `ttr` already answers the
-    identical 0/0 with `0.0` — returning null from one Tier 1 ratio and zero from another
-    for the same input would be the worse inconsistency. The consequence to know: the two
-    densities sum to 1 for any text containing words, and to 0 for one that does not.
-    """
-    if not total:
-        return 0.0
-    return round(matching / total, 4)
 
 
 class WordCount(FeatureComputer):
@@ -122,7 +109,7 @@ class ContentWordDensity(FeatureComputer):
     def compute(self, ctx: AnalysisContext) -> float:
         tokens = word_tokens(ctx.get(SPACY_DOC))
         content = sum(1 for t in tokens if t.pos_ in CONTENT_POS)
-        return _density(content, len(tokens))
+        return ratio(content, len(tokens))
 
 
 class FunctionWordDensity(FeatureComputer):
@@ -139,7 +126,7 @@ class FunctionWordDensity(FeatureComputer):
     def compute(self, ctx: AnalysisContext) -> float:
         tokens = word_tokens(ctx.get(SPACY_DOC))
         function = sum(1 for t in tokens if t.pos_ not in CONTENT_POS)
-        return _density(function, len(tokens))
+        return ratio(function, len(tokens))
 
 
 class TypeTokenRatio(FeatureComputer):
@@ -149,6 +136,4 @@ class TypeTokenRatio(FeatureComputer):
 
     def compute(self, ctx: AnalysisContext) -> float:
         tokens = word_tokens(ctx.get(SPACY_DOC))
-        if not tokens:
-            return 0.0
-        return round(len({t.lower_ for t in tokens}) / len(tokens), 4)
+        return ratio(len({t.lower_ for t in tokens}), len(tokens))

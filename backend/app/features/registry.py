@@ -27,6 +27,19 @@ from app.features.tier1.lexical import (
     UniqueWordCount,
     WordCount,
 )
+from app.features.tier1.sentence import (
+    ComplexSentenceCount,
+    ComplexSentenceDensity,
+    CompoundComplexSentenceCount,
+    CompoundComplexSentenceDensity,
+    CompoundSentenceCount,
+    CompoundSentenceDensity,
+    SentenceCount,
+    SentenceLengthMean,
+    SentenceLengthStdev,
+    SimpleSentenceCount,
+    SimpleSentenceDensity,
+)
 from app.features.tier2.cohesion import Cohesion
 from app.features.tier2.coreference import Coreference
 from app.features.tier2.sentiment import Sentiment
@@ -49,6 +62,18 @@ _COMPUTERS: tuple[FeatureComputer, ...] = (
     NounClauseCount(),
     AdjectiveClauseCount(),
     AdverbialClauseCount(),
+    # Tier 1 — sentence (specs_features.md §4)
+    SentenceCount(),
+    SimpleSentenceCount(),
+    SimpleSentenceDensity(),
+    CompoundSentenceCount(),
+    CompoundSentenceDensity(),
+    ComplexSentenceCount(),
+    ComplexSentenceDensity(),
+    CompoundComplexSentenceCount(),
+    CompoundComplexSentenceDensity(),
+    SentenceLengthMean(),
+    SentenceLengthStdev(),
     # Tier 2
     Sentiment(),
     Coreference(),

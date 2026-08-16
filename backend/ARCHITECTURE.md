@@ -29,9 +29,9 @@ each feature computes. This one assumes you have read it and are about to change
 
 ## 1. The problem the architecture solves
 
-Twenty-eight features share a small number of expensive underlying computations:
+Thirty-nine features share a small number of expensive underlying computations:
 
-- All thirteen Tier 1 features need a spaCy parse.
+- All 24 Tier 1 features need a spaCy parse.
 - `perplexity` and `mean_surprisal` both need DistilGPT2 log-probs.
 - `cohesion` (single) and `semantic_similarity` (comparison) both need MiniLM sentence vectors.
 - `ngram_overlap`, `pos_divergence` and `dep_divergence` need the same spaCy parse the Tier 1
@@ -391,19 +391,9 @@ redundant computation the multi-pass design exists to prevent."*
 
 | Feature | Tier | `requires` | Returns |
 |---|---|---|---|
-| `word_count` | 1 | `spacy.doc` | `int` |
-| `unique_word_count` | 1 | `spacy.doc` | `int` (over `t.lower_`) |
-| `lemma_count` | 1 | `spacy.doc` | `int` (over `lemma_forms`) |
-| `unique_lemma_count` | 1 | `spacy.doc` | `int` (distinct lemmas) |
-| `content_word_count` | 1 | `spacy.doc` | `int` (POS ∈ `CONTENT_POS`) |
-| `function_word_count` | 1 | `spacy.doc` | `int` (POS ∉ `CONTENT_POS`) |
-| `content_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
-| `function_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
-| `ttr` | 1 | `spacy.doc` | `float`, `0.0` on empty |
-| `infinitive_clause_count` | 1 | `spacy.doc` | `int` (`TO`+`VB` shape) |
-| `noun_clause_count` | 1 | `spacy.doc` | `int` (`NOUN_CLAUSE_DEPS`) |
-| `adjective_clause_count` | 1 | `spacy.doc` | `int` (`ADJECTIVE_CLAUSE_DEPS`) |
-| `adverbial_clause_count` | 1 | `spacy.doc` | `int` (`ADVERBIAL_CLAUSE_DEPS`) |
+| 9 lexical features | 1 | `spacy.doc` | counts, densities, TTR (`tier1/lexical.py`) |
+| 4 clause counts | 1 | `spacy.doc` | dependency-label predicates (`tier1/clause.py`) |
+| 11 sentence features | 1 | `spacy.doc` | count, classes, densities, length stats (`tier1/sentence.py`) |
 | `sentiment` | 2 | `sentiment.document` | `{label, score}` |
 | `coreference` | 2 | `coref.clusters` | `{chain_count}` |
 | `cohesion` | 2 | `embedding.sentence_vectors` | `{mean_adjacent_similarity, sentence_count}` |
@@ -414,11 +404,24 @@ Notice how thin most of them are. `Sentiment.compute` is one `ctx.get` and a dic
 thinness is the evidence the split worked: the expensive part moved to Pass 1, so Pass 2 is pure
 shaping.
 
-Tier 1 spans two modules: `tier1/lexical.py` (nine token-level features) and `tier1/clause.py`
-(four dependency-label counts). The split follows `specs_features.md`'s feature groups, and the
-clause module keeps its label sets as named `frozenset` constants — `NOUN_CLAUSE_DEPS` and
-friends — rather than inline strings, so a mistyped label reads as a wrong-looking constant
-instead of a count that silently returns zero.
+Tier 1 spans three feature modules plus a helper: `tier1/lexical.py` (nine token-level
+features), `tier1/clause.py` (four dependency-label counts), `tier1/sentence.py` (eleven
+sentence-level features), and `tier1/stats.py`, which holds `ratio`, `mean` and `stdev`. The
+split follows `specs_features.md`'s feature groups.
+
+Two conventions carry across those modules. Dependency-label sets are named `frozenset`
+constants — `NOUN_CLAUSE_DEPS`, `SUBJECT_DEPS` and friends — never inline strings, so a mistyped
+label reads as a wrong-looking constant instead of a count that silently returns zero. And every
+ratio, mean and standard deviation goes through `stats.py`, so the "what does a zero denominator
+return" and "population or sample stdev" questions each have exactly one answer rather than one
+per feature group.
+
+`tier1/sentence.py` is the first module where several computers share a non-trivial derivation:
+eight of its eleven re-run `classify_sentences()`. That repetition is deliberate. A computer may
+not cache across computers — Pass 2 only reads the context — and classification is O(tokens),
+the same order as the `word_tokens` scan the lexical group already repeats nine times. If it
+ever shows up in profiling the fix is a derived Pass 1 signal, which is a design change under
+the spec's one-signal rule, not a cache smuggled into a computer.
 
 The two lemma computers share a `lemma_forms(doc)` helper local to `tier1/lexical.py`, which
 lowercases the lemma of each word token and drops blanks. The filtering lives in the helper
@@ -643,11 +646,11 @@ POST /api/v1/analyze
   └─ AnalysisService.analyze_text(text, 0, tiers=[1,3])
        │
        ├─ 1. plan() → feature_registry.select(tiers=[1,3])
-       │       → the 13 Tier 1 computers (lexical ×9, clause ×4)
+       │       → the 24 Tier 1 computers (lexical ×9, clause ×4, sentence ×11)
        │         + Perplexity, MeanSurprisal
        │
        ├─ 2. required_signals(computers)  ← SET UNION over `requires`
-       │       all 13 Tier 1 features → {spacy.doc}   ── 13 declarations, ONE entry
+       │       all 24 Tier 1 features → {spacy.doc}   ── 24 declarations, ONE entry
        │       perplexity             → {lm.token_logprobs}
        │       mean_surprisal         → {lm.token_logprobs, spacy.doc, alignment.lm_to_spacy}
        │       ────────────────────────────────────────────────────────────────
@@ -677,7 +680,7 @@ iterates `sorted(set(required))`, which is
 `lm.token_logprobs` to the output before appending itself. The sort determines which root is
 *visited* first; the `depends_on` tuple order determines the actual emitted order.
 
-Then Pass 2 runs, and `spacy.doc` was parsed exactly once for fifteen features — with no cache
+Then Pass 2 runs, and `spacy.doc` was parsed exactly once for 26 features — with no cache
 anywhere in the system.
 
 ---

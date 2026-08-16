@@ -188,10 +188,15 @@ subordinated than it is. It belongs in the §10 disclosure.
 
 ---
 
-## 4. Tier 1 — Sentence 📋
+## 4. Tier 1 — Sentence ✅
 
-New module: `app/features/tier1/sentence.py`. Sentence segmentation is `doc.sents`, i.e. the
-same parse; no separate sentencizer.
+Implemented in `app/features/tier1/sentence.py`; tests in `tests/test_sentence_features.py`.
+Sentence segmentation is `doc.sents`, i.e. the same parse; no separate sentencizer.
+
+The classifier is `classify_sentence()`, built from `count_independent_clauses()` and
+`count_dependent_clauses()`; the label sets are the module constants `SUBJECT_DEPS`,
+`DEPENDENT_CLAUSE_DEPS` and `FINITE_VERB_TAGS`. Ratios, means and stdevs come from
+`app/features/tier1/stats.py`, which is the single implementation of §1.4–1.6.
 
 | Feature | Definition | Type |
 |---|---|---|
@@ -423,7 +428,8 @@ own, matching the group headings here:
 app/features/tier1/
 ├── lexical.py       ✅ 9 features
 ├── clause.py        ✅ 4
-├── sentence.py      📋 11
+├── stats.py         ✅ ratio / mean / stdev (§1.4-1.6)
+├── sentence.py      ✅ 11
 ├── punctuation.py   📋 5
 └── complexity.py    📋 6
 ```
@@ -439,6 +445,12 @@ Sentence-level features need a shared "sentences with at least one word token" h
 several groups need per-sentence series. Put shared predicates where their consumers are: local
 to a module while one module uses them, promoted to `signals/spacy_extractor.py` (alongside
 `word_tokens` and `CONTENT_POS`) only once a second module needs them.
+
+`content_sentences()` lives in `tier1/sentence.py` under that rule; §6 will be its second
+consumer, at which point it moves. The numeric conventions took the other path already:
+`tier1/stats.py` exists because §4 needed both a ratio and mean/stdev, and `lexical.py` had a
+private ratio of its own — two implementations of §1.4 is exactly the drift these conventions
+exist to prevent, so the lexical copy was folded into the shared one.
 
 Clause-label predicates in particular should be named constants, not inline label strings —
 `ADJECTIVE_CLAUSE_DEPS = frozenset({"relcl", "acl"})` — so the §3 definitions are greppable and
@@ -530,9 +542,9 @@ suggestions, and neither is satisfied by anything in the current codebase:
 - **UI disclosure — now outstanding.** Parser-derived features — every feature in §3, §4 and
   §6 — must be presented in the results pane with a visible note that they are approximate.
   The scope is exactly those three groups; the lexical group in §2 needs no caveat, since POS
-  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3 has shipped,
-  so this is due now**: the four clause counts are live in the API and reach the results pane
-  with no caveat attached. It is the one piece of Decision 5 that the backend cannot satisfy
+  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3 and §4 have shipped,
+  so this is due now**: fifteen parser-derived features are live in the API and reach the
+  results pane with no caveat attached. It is the one piece of Decision 5 that the backend cannot satisfy
   on its own.
 - **Benchmark before any upgrade.** Compare `en_core_web_sm` against `en_core_web_md` on
   representative inputs, measuring both the accuracy gain on structural features and the cost in

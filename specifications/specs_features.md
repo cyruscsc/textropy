@@ -120,12 +120,14 @@ it is the reason `lemma_count` is worth keeping as a separate key.
 
 ---
 
-## 3. Tier 1 — Clause 📋
+## 3. Tier 1 — Clause ✅
 
-New module: `app/features/tier1/clause.py`.
+Implemented in `app/features/tier1/clause.py`; tests in `tests/test_clause_features.py`.
 
 All four count clause *instances across the whole text*, not per sentence. Each is the number
-of tokens in the document matching a dependency-label predicate.
+of tokens in the document matching a dependency-label predicate. The label sets are the module
+constants `NOUN_CLAUSE_DEPS`, `ADJECTIVE_CLAUSE_DEPS` and `ADVERBIAL_CLAUSE_DEPS`; the
+infinitive predicate is `is_infinitive_clause()`.
 
 | Feature | Counts tokens where | Type |
 |---|---|---|
@@ -420,7 +422,7 @@ own, matching the group headings here:
 ```
 app/features/tier1/
 ├── lexical.py       ✅ 9 features
-├── clause.py        📋 4
+├── clause.py        ✅ 4
 ├── sentence.py      📋 11
 ├── punctuation.py   📋 5
 └── complexity.py    📋 6
@@ -525,10 +527,13 @@ and what revisiting would cost — the definitions alone would show only the win
 Accepting option 1 defers cost rather than removing it. Both items below are commitments, not
 suggestions, and neither is satisfied by anything in the current codebase:
 
-- **UI disclosure.** Parser-derived features — every feature in §3, §4 and §6 — must be
-  presented in the results pane with a visible note that they are approximate. The scope is
-  exactly the three planned groups; the lexical group in §2 needs no caveat, since POS tagging
-  on `en_core_web_sm` is materially more reliable than its parsing.
+- **UI disclosure — now outstanding.** Parser-derived features — every feature in §3, §4 and
+  §6 — must be presented in the results pane with a visible note that they are approximate.
+  The scope is exactly those three groups; the lexical group in §2 needs no caveat, since POS
+  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3 has shipped,
+  so this is due now**: the four clause counts are live in the API and reach the results pane
+  with no caveat attached. It is the one piece of Decision 5 that the backend cannot satisfy
+  on its own.
 - **Benchmark before any upgrade.** Compare `en_core_web_sm` against `en_core_web_md` on
   representative inputs, measuring both the accuracy gain on structural features and the cost in
   image size and per-request latency. Decision 5 should not be revisited on the strength of the

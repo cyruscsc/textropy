@@ -10,6 +10,12 @@ from collections.abc import Iterable
 from typing import Any
 
 from app.features.base import FeatureComputer
+from app.features.tier1.clause import (
+    AdjectiveClauseCount,
+    AdverbialClauseCount,
+    InfinitiveClauseCount,
+    NounClauseCount,
+)
 from app.features.tier1.lexical import (
     ContentWordCount,
     ContentWordDensity,
@@ -38,6 +44,11 @@ _COMPUTERS: tuple[FeatureComputer, ...] = (
     ContentWordDensity(),
     FunctionWordDensity(),
     TypeTokenRatio(),
+    # Tier 1 — clause (specs_features.md §3)
+    InfinitiveClauseCount(),
+    NounClauseCount(),
+    AdjectiveClauseCount(),
+    AdverbialClauseCount(),
     # Tier 2
     Sentiment(),
     Coreference(),

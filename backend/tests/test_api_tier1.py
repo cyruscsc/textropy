@@ -31,6 +31,11 @@ def test_catalog_covers_every_spec_feature(client):
         "content_word_density",
         "function_word_density",
         "ttr",
+        # specs_features.md §3 — clause group
+        "infinitive_clause_count",
+        "noun_clause_count",
+        "adjective_clause_count",
+        "adverbial_clause_count",
         "sentiment",
         "coreference",
         "cohesion",

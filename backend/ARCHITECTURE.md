@@ -29,9 +29,9 @@ each feature computes. This one assumes you have read it and are about to change
 
 ## 1. The problem the architecture solves
 
-Twenty-four features share a small number of expensive underlying computations:
+Twenty-eight features share a small number of expensive underlying computations:
 
-- All nine Tier 1 features need a spaCy parse.
+- All thirteen Tier 1 features need a spaCy parse.
 - `perplexity` and `mean_surprisal` both need DistilGPT2 log-probs.
 - `cohesion` (single) and `semantic_similarity` (comparison) both need MiniLM sentence vectors.
 - `ngram_overlap`, `pos_divergence` and `dep_divergence` need the same spaCy parse the Tier 1
@@ -400,6 +400,10 @@ redundant computation the multi-pass design exists to prevent."*
 | `content_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
 | `function_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
 | `ttr` | 1 | `spacy.doc` | `float`, `0.0` on empty |
+| `infinitive_clause_count` | 1 | `spacy.doc` | `int` (`TO`+`VB` shape) |
+| `noun_clause_count` | 1 | `spacy.doc` | `int` (`NOUN_CLAUSE_DEPS`) |
+| `adjective_clause_count` | 1 | `spacy.doc` | `int` (`ADJECTIVE_CLAUSE_DEPS`) |
+| `adverbial_clause_count` | 1 | `spacy.doc` | `int` (`ADVERBIAL_CLAUSE_DEPS`) |
 | `sentiment` | 2 | `sentiment.document` | `{label, score}` |
 | `coreference` | 2 | `coref.clusters` | `{chain_count}` |
 | `cohesion` | 2 | `embedding.sentence_vectors` | `{mean_adjacent_similarity, sentence_count}` |
@@ -409,6 +413,12 @@ redundant computation the multi-pass design exists to prevent."*
 Notice how thin most of them are. `Sentiment.compute` is one `ctx.get` and a dict literal. That
 thinness is the evidence the split worked: the expensive part moved to Pass 1, so Pass 2 is pure
 shaping.
+
+Tier 1 spans two modules: `tier1/lexical.py` (nine token-level features) and `tier1/clause.py`
+(four dependency-label counts). The split follows `specs_features.md`'s feature groups, and the
+clause module keeps its label sets as named `frozenset` constants — `NOUN_CLAUSE_DEPS` and
+friends — rather than inline strings, so a mistyped label reads as a wrong-looking constant
+instead of a count that silently returns zero.
 
 The two lemma computers share a `lemma_forms(doc)` helper local to `tier1/lexical.py`, which
 lowercases the lemma of each word token and drops blanks. The filtering lives in the helper
@@ -633,22 +643,13 @@ POST /api/v1/analyze
   └─ AnalysisService.analyze_text(text, 0, tiers=[1,3])
        │
        ├─ 1. plan() → feature_registry.select(tiers=[1,3])
-       │       → [WordCount, UniqueWordCount, LemmaCount, UniqueLemmaCount,
-       │          ContentWordCount, FunctionWordCount, ContentWordDensity,
-       │          FunctionWordDensity, TypeTokenRatio, Perplexity, MeanSurprisal]
+       │       → the 13 Tier 1 computers (lexical ×9, clause ×4)
+       │         + Perplexity, MeanSurprisal
        │
        ├─ 2. required_signals(computers)  ← SET UNION over `requires`
-       │       word_count            → {spacy.doc}          ─┐
-       │       unique_word_count     → {spacy.doc}           │
-       │       lemma_count           → {spacy.doc}           │
-       │       unique_lemma_count    → {spacy.doc}           │
-       │       content_word_count    → {spacy.doc}           ├─ collapse to ONE entry
-       │       function_word_count   → {spacy.doc}           │
-       │       content_word_density  → {spacy.doc}           │
-       │       function_word_density → {spacy.doc}           │
-       │       ttr                   → {spacy.doc}          ─┘
-       │       perplexity            → {lm.token_logprobs}
-       │       mean_surprisal        → {lm.token_logprobs, spacy.doc, alignment.lm_to_spacy}
+       │       all 13 Tier 1 features → {spacy.doc}   ── 13 declarations, ONE entry
+       │       perplexity             → {lm.token_logprobs}
+       │       mean_surprisal         → {lm.token_logprobs, spacy.doc, alignment.lm_to_spacy}
        │       ────────────────────────────────────────────────────────────────
        │       union = {spacy.doc, lm.token_logprobs, alignment.lm_to_spacy}
        │
@@ -676,7 +677,7 @@ iterates `sorted(set(required))`, which is
 `lm.token_logprobs` to the output before appending itself. The sort determines which root is
 *visited* first; the `depends_on` tuple order determines the actual emitted order.
 
-Then Pass 2 runs, and `spacy.doc` was parsed exactly once for eleven features — with no cache
+Then Pass 2 runs, and `spacy.doc` was parsed exactly once for fifteen features — with no cache
 anywhere in the system.
 
 ---

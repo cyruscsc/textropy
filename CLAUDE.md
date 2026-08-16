@@ -129,7 +129,8 @@ textropy/
 │   ├── tests/
 │   ├── Dockerfile
 │   ├── pyproject.toml + uv.lock
-│   └── README.md
+│   ├── README.md               # orientation: setup, features, API, config, deployment
+│   └── ARCHITECTURE.md         # pipeline internals: classes, data flow, invariants
 ├── frontend/                 # Next.js 16 App Router, per spec §11
 │   ├── app/{layout.tsx, page.tsx, globals.css}   # page.tsx composes the 3 panes + tabs; globals.css holds the tokens
 │   ├── components/
@@ -139,7 +140,8 @@ textropy/
 │   │   └── shared/{Toast, ErrorBanner}.tsx
 │   ├── lib/{api.ts, history.ts, types.ts, useAnalysisState.ts, format.ts}   # format.ts is additive: label/number/relative-time helpers
 │   ├── Dockerfile            # 3-stage → standalone server on node:24-alpine, uid 10001
-│   └── README.md
+│   ├── README.md             # orientation: commands, API/CORS pairing, Docker
+│   └── ARCHITECTURE.md       # UI internals: design tokens, pane wiring, state machine
 ├── compose.yml               # api + frontend only, no db/cache/worker (spec §8 calls it
 │                             # docker-compose.yml; compose.yml is the Compose Spec name)
 └── .env.example              # copy to .env on the VPS — compose interpolation only

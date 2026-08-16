@@ -4,6 +4,11 @@ Next.js (App Router) UI for the Textropy analysis API, implementing §9–13 of
 `../specifications/specs_mvp.md`. Read those sections before changing layout, state or
 design tokens — the spec is the source of truth, not this README.
 
+This README is the orientation document. For a code-level walkthrough of the UI — how the
+design tokens are encoded, how the three panes are wired to one state machine, how the
+results pane renders unknown feature shapes, and the invariants that hold it together —
+see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## Commands
 
 ```bash
@@ -48,6 +53,7 @@ app/          layout.tsx (fonts) · page.tsx (composes the 3 panes, owns the tab
               globals.css (design tokens — every colour lives here, §12.2)
 components/   history/ · analysis-form/ · results/ · shared/
 lib/          api.ts · history.ts · types.ts · useAnalysisState.ts · format.ts
+ARCHITECTURE.md   code-level walkthrough of all three
 ```
 
 Three things worth knowing before editing:
@@ -62,6 +68,9 @@ Three things worth knowing before editing:
   a row and an object into a nested group, so `{label, score}` and `{a_given_b, b_given_a}`
   both display without special-casing. A feature reporting `{"available": false}` degrades
   to an "Unavailable" row instead of failing the pane (§13.4).
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) covers all three in detail, along with the design-token
+system and the invariants a new component has to respect.
 
 ## Not yet built
 

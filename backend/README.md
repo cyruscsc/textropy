@@ -7,6 +7,11 @@ across three tiers of increasing computational cost. Implements the MVP spec in
 There is no database, no cache, no job queue, and no auth. A request arrives, is analysed
 entirely in memory, and everything computed for it is discarded when the response is sent.
 
+This README is the orientation document. For a code-level walkthrough of the pipeline — every
+class in `pipeline/`, `models_ml/`, `signals/`, `features/` and `comparison/`, the data flow
+through them, and the invariants that hold the design together — see
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ---
 
 ## Quick start
@@ -364,6 +369,9 @@ That is all. The orchestrator picks up the new requirement, `/api/v1/features` a
 and the response gains a key. If it needs a signal that does not exist yet, add the extractor
 in `signals/`, give it a constant in `signals/base.py`, and register it — dependents are found
 through `depends_on`, not through edits to the service.
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) walks through both paths in detail, along with the
+invariants a new computer has to respect.
 
 ---
 

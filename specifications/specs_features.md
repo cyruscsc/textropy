@@ -273,10 +273,14 @@ as **complex** rather than compound, because the parser makes the first clause a
 
 ---
 
-## 5. Tier 1 — Punctuation 📋
+## 5. Tier 1 — Punctuation ✅
 
-New module: `app/features/tier1/punctuation.py`. Note this is the one group whose denominator
-is *not* `word_count`.
+Implemented in `app/features/tier1/punctuation.py`; tests in
+`tests/test_punctuation_features.py`. This is the one group whose denominator is *not*
+`word_count`, and the one whose tokens every other Tier 1 group excludes (§1.2).
+
+Unlike §3, §4 and §6 this group reads tags rather than parse structure, so it sits outside the
+§11.1 disclosure scope — with the ellipsis caveat in §5.1.1 as its own local qualification.
 
 | Feature | Definition | Type |
 |---|---|---|
@@ -288,17 +292,46 @@ is *not* `word_count`.
 
 ### 5.1 The terminal test
 
-`tag_ == "."` is the reliable discriminator, verified against the model: `.`, `!`, `?` and `...`
-all receive it, while `,` gets `,`, and `;`, `:` and `--` all get `:`. Brackets get `-LRB-` /
-`-RRB-`, and opening and closing quotes get their own distinct tags.
+`tag_ == "."` is the discriminator. Verified against the model: `.`, `!` and `?` all receive
+it, while `,` gets `,`, and `;`, `:` and `--` all get `:`. Brackets get `-LRB-` / `-RRB-`, and
+opening and closing quotes get their own distinct tags.
 
-Matching on the token's text instead would need an open-ended character list and would still
-miss `...` as a single token. Do not use `is_sent_end`, which is true of the last token of a
-sentence whether or not it is punctuation.
+Matching on the token's text instead would need an open-ended character list. Do not use
+`is_sent_end`, which is true of the last token of a sentence whether or not it is punctuation.
 
 Internal punctuation is defined as the complement (`is_punct and tag_ != "."`), so the two
 counts partition `punctuation_count` and the two ratios sum to 1.0 whenever any punctuation is
 present. This makes quotes, brackets and dashes internal, which is the intended reading.
+
+### 5.1.1 ⚠️ Correction: ellipsis is not reliably terminal
+
+An earlier draft of this section claimed `...` also receives `.`. **That is wrong**, and it was
+wrong because it generalised from a single verified example. Re-checked across contexts:
+
+| Text | tag on `...` |
+|---|---|
+| `Stop! Really? Yes... Maybe -- perhaps.` | `.` |
+| `Yes...` | `:` |
+| `Yes... Maybe.` | `:` |
+| `Wait... what?` | `:` |
+| `He paused... then left.` | `:` |
+| `...` | `:` |
+
+`...` is tagged `:` in most contexts and `.` in some — a statistical tagger's output on the same
+three characters, not a rule. So **an ellipsis usually counts as internal punctuation, but not
+always**, and the same text can classify differently depending on its neighbours.
+
+The definition above is unchanged: `tag_ == "."` remains the test, and `is_terminal_punctuation`
+in the module carries this caveat. Two alternatives were considered and not taken, because
+either is a definitional change rather than a fix:
+
+- **Treat `...` as terminal by text match.** Contradicts the reason the tag test was chosen, and
+  would wrongly mark the mid-sentence `He paused... then left.` as terminal.
+- **Treat `...` as internal by text match.** More predictable, but overrides the tagger in the
+  cases where it is right, and still hard-codes one character sequence.
+
+If the inconsistency proves to matter in practice, it belongs in §11 as a new decision with the
+alternatives above — not as a quiet change to the predicate.
 
 ### 5.2 Correction to the draft
 
@@ -430,7 +463,7 @@ app/features/tier1/
 ├── clause.py        ✅ 4
 ├── stats.py         ✅ ratio / mean / stdev (§1.4-1.6)
 ├── sentence.py      ✅ 11
-├── punctuation.py   📋 5
+├── punctuation.py   ✅ 5
 └── complexity.py    📋 6
 ```
 

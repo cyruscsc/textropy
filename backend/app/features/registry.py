@@ -27,6 +27,13 @@ from app.features.tier1.lexical import (
     UniqueWordCount,
     WordCount,
 )
+from app.features.tier1.punctuation import (
+    InternalPunctuationCount,
+    InternalPunctuationRatio,
+    PunctuationCount,
+    TerminalPunctuationCount,
+    TerminalPunctuationRatio,
+)
 from app.features.tier1.sentence import (
     ComplexSentenceCount,
     ComplexSentenceDensity,
@@ -74,6 +81,12 @@ _COMPUTERS: tuple[FeatureComputer, ...] = (
     CompoundComplexSentenceDensity(),
     SentenceLengthMean(),
     SentenceLengthStdev(),
+    # Tier 1 — punctuation (specs_features.md §5)
+    PunctuationCount(),
+    InternalPunctuationCount(),
+    InternalPunctuationRatio(),
+    TerminalPunctuationCount(),
+    TerminalPunctuationRatio(),
     # Tier 2
     Sentiment(),
     Coreference(),

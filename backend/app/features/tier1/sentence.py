@@ -102,6 +102,7 @@ class SentenceCount(FeatureComputer):
     name = "sentence_count"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> int:
         return len(content_sentences(ctx.get(SPACY_DOC)))
@@ -116,6 +117,7 @@ class _SentenceClassCount(FeatureComputer):
 
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
     sentence_class: str
 
     def compute(self, ctx: AnalysisContext) -> int:
@@ -127,6 +129,7 @@ class _SentenceClassDensity(FeatureComputer):
 
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
     sentence_class: str
 
     def compute(self, ctx: AnalysisContext) -> float:
@@ -178,6 +181,7 @@ class SentenceLengthMean(FeatureComputer):
     name = "sentence_length_mean"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return mean(sentence_lengths(ctx.get(SPACY_DOC)))
@@ -187,6 +191,7 @@ class SentenceLengthStdev(FeatureComputer):
     name = "sentence_length_stdev"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return stdev(sentence_lengths(ctx.get(SPACY_DOC)))

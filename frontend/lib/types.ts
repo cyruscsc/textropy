@@ -21,6 +21,14 @@ export interface FeatureCatalogEntry {
   /** `null` for single-text features; comparison features are true/false. */
   symmetric: boolean | null;
   requires: string[];
+  /**
+   * The feature reads dependency-parse structure, so its value is only as good as
+   * `en_core_web_sm`'s parse (specs_features.md §10, Decision 5). The results pane is
+   * obliged to mark these as approximate (§11.1); it reads the flag from here rather
+   * than keeping its own list of names, so a parser-derived feature added to the backend
+   * arrives already carrying its caveat.
+   */
+  approximate: boolean;
 }
 
 export interface FeatureCatalogResponse {

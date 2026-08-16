@@ -151,6 +151,7 @@ def catalog() -> list[dict[str, Any]]:
             "scope": "single",
             "symmetric": None,
             "requires": list(c.requires),
+            "approximate": c.approximate,
         }
         for c in _COMPUTERS
     ]

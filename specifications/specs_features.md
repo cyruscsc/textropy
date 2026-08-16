@@ -475,6 +475,10 @@ All 35 are implemented. Each computer declares `requires = (SPACY_DOC,)` and is 
 new features automatically — the frontend picker builds itself from that endpoint, so no
 frontend change is needed either.
 
+A computer in the clause, sentence or complexity groups must also set `approximate = True`,
+which is what carries the §11.1 disclosure into the UI. It is the one piece of metadata a new
+Tier 1 feature has to get right by hand; the pinning test in §9.4 is what catches it.
+
 ### 9.2 Shared helpers
 
 Sentence-level features need a shared "sentences with at least one word token" helper, and
@@ -515,6 +519,9 @@ tests miss:
 - every ratio is `0.0` when its denominator is 0
 - every stdev is `0.0` for a single-element series
 - MDD, tree depth and phrasal elaboration agree with hand-computed arcs on a known parse
+- the catalog's `approximate` set is exactly §3 ∪ §4 ∪ §6 — pinned rather than spot-checked,
+  since §11.1's disclosure is scoped by group and a new feature on the wrong side of the line
+  would otherwise reach the results pane with the wrong caveat
 
 ---
 
@@ -577,14 +584,28 @@ and what revisiting would cost — the definitions alone would show only the win
 Accepting option 1 defers cost rather than removing it. Both items below are commitments, not
 suggestions, and neither is satisfied by anything in the current codebase:
 
-- **UI disclosure — now outstanding.** Parser-derived features — every feature in §3, §4 and
+- **UI disclosure — ✅ satisfied.** Parser-derived features — every feature in §3, §4 and
   §6 — must be presented in the results pane with a visible note that they are approximate.
   The scope is exactly those three groups; the lexical group in §2 needs no caveat, since POS
-  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3, §4 and §6 have all shipped,
-  so this is due now and complete in scope**: twenty-one parser-derived features are live in
-  the API and reach the results pane with no caveat attached. No further backend work will
-  reduce it. It is the one piece of Decision 5 that the backend cannot satisfy
-  on its own.
+  tagging on `en_core_web_sm` is materially more reliable than its parsing, and the
+  punctuation group in §5 reads tags rather than parse structure (§5's preamble).
+
+  **How it is implemented.** The obligation is scoped by *group*, but the results pane
+  renders by value shape and knows nothing about groups — and a hand-maintained list of
+  twenty-one names in the frontend would drift the first time a parser-derived feature was
+  added. So the scope is published instead: `FeatureComputer.approximate` is a class
+  attribute, set on the twenty-one computers in `clause.py`, `sentence.py` and
+  `complexity.py`, and `GET /api/v1/features` carries it as a per-feature `approximate`
+  boolean. The frontend builds a predicate from that catalog and marks each affected row
+  with a `≈` footnote, with the matching note at the foot of any tier section containing
+  one. A new parser-derived feature therefore ships with its caveat attached and needs no
+  frontend change.
+
+  This keeps §11.1 a genuinely shared obligation: the backend cannot *display* anything, but
+  it is the only side that knows which features read the parse, so it declares the scope and
+  the frontend discloses it. `tests/test_api_tier1.py::test_catalog_marks_exactly_the_parser_derived_features_approximate`
+  pins the set, so a feature landing in the wrong half fails there rather than reaching a
+  reader mislabelled.
 - **Benchmark before any upgrade.** Compare `en_core_web_sm` against `en_core_web_md` on
   representative inputs, measuring both the accuracy gain on structural features and the cost in
   image size and per-request latency. Decision 5 should not be revisited on the strength of the

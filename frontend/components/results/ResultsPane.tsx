@@ -5,6 +5,8 @@
  * it owns no results of its own.
  */
 
+import { useCallback, useMemo } from "react";
+
 import ComparisonDiffView from "@/components/results/ComparisonDiffView";
 import CopyResultsButton from "@/components/results/CopyResultsButton";
 import ResultsEmptyState from "@/components/results/ResultsEmptyState";
@@ -23,7 +25,13 @@ function orderedTiers(features: TieredFeatures): [number, TieredFeatures[string]
     .map(([tier, block]) => [tier, block]);
 }
 
-function TieredBlocks({ features }: { features: TieredFeatures }) {
+function TieredBlocks({
+  features,
+  isApproximate,
+}: {
+  features: TieredFeatures;
+  isApproximate: (name: string) => boolean;
+}) {
   const tiers = orderedTiers(features);
   if (tiers.length === 0) {
     return <p className="text-ink-muted text-sm">No features computed.</p>;
@@ -31,7 +39,12 @@ function TieredBlocks({ features }: { features: TieredFeatures }) {
   return (
     <div className="flex flex-col">
       {tiers.map(([tier, block]) => (
-        <TierResultSection key={tier} tier={tier} block={block} />
+        <TierResultSection
+          key={tier}
+          tier={tier}
+          block={block}
+          isApproximate={isApproximate}
+        />
       ))}
     </div>
   );
@@ -47,6 +60,29 @@ export default function ResultsPane({
   const tier3Selected = catalog.some(
     (entry) => entry.tier === 3 && effectiveSelection.includes(entry.name),
   );
+
+  /**
+   * specs_features.md §11.1: parser-derived values must reach the reader marked as
+   * approximate. Which features those are comes from the catalog — the same source the
+   * picker builds from — so the pane never carries its own list of feature names and a
+   * new parser-derived backend feature is disclosed without a frontend change.
+   */
+  const approximateNames = useMemo(
+    () => new Set(catalog.filter((entry) => entry.approximate).map((entry) => entry.name)),
+    [catalog],
+  );
+  const isApproximate = useCallback(
+    (name: string) => approximateNames.has(name),
+    [approximateNames],
+  );
+
+  /**
+   * A stored history entry renders against whatever catalog this session loaded, so if
+   * the catalog fetch failed the markers silently vanish from values that still need
+   * them. Saying so is the honest fallback: §11.1 forbids presenting these as
+   * authoritative, not merely rendering them.
+   */
+  const disclosureUnresolved = catalog.length === 0;
 
   const body = () => {
     if (state === "analyzing") return <ResultsSkeleton slow={tier3Selected} />;
@@ -68,6 +104,13 @@ export default function ResultsPane({
 
     return (
       <div className="flex flex-col gap-6 p-6">
+        {disclosureUnresolved ? (
+          <p className="border-border text-ink-muted rounded border border-dashed p-3 text-xs leading-relaxed">
+            Feature metadata could not be loaded, so approximate metrics are not marked
+            below. Values derived from the dependency parse are only as accurate as it is.
+          </p>
+        ) : null}
+
         {isCompare ? (
           <>
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -76,7 +119,10 @@ export default function ResultsPane({
                   <h3 className="text-ink text-sm font-semibold">
                     Text {result.text_index === 0 ? "A" : "B"}
                   </h3>
-                  <TieredBlocks features={result.features} />
+                  <TieredBlocks
+                    features={result.features}
+                    isApproximate={isApproximate}
+                  />
                 </div>
               ))}
             </div>
@@ -84,7 +130,10 @@ export default function ResultsPane({
             {response.comparison ? (
               <div className="flex flex-col gap-2">
                 <h3 className="text-ink text-sm font-semibold">Comparison</h3>
-                <TieredBlocks features={response.comparison} />
+                <TieredBlocks
+                  features={response.comparison}
+                  isApproximate={isApproximate}
+                />
               </div>
             ) : null}
 
@@ -92,7 +141,11 @@ export default function ResultsPane({
           </>
         ) : (
           response.results.map((result) => (
-            <TieredBlocks key={result.text_index} features={result.features} />
+            <TieredBlocks
+              key={result.text_index}
+              features={result.features}
+              isApproximate={isApproximate}
+            />
           ))
         )}
 

@@ -377,9 +377,10 @@ The contract (`features/base.py:11`) is deliberately narrower than the extractor
 
 ```python
 class FeatureComputer(ABC):
-    name:     ClassVar[str]
-    tier:     ClassVar[int]
-    requires: ClassVar[tuple[str, ...]] = ()
+    name:        ClassVar[str]
+    tier:        ClassVar[int]
+    requires:    ClassVar[tuple[str, ...]] = ()
+    approximate: ClassVar[bool] = False
 
     @abstractmethod
     def compute(self, ctx: AnalysisContext) -> Any: ...
@@ -522,8 +523,16 @@ return {signal for computer in computers for signal in computer.requires}
 A **set union over declarations**. Five Tier 1 features each declaring `spacy.doc` collapse to one
 entry. No cache, no memoisation — just a set.
 
-`catalog()` (`registry.py:73`) emits the `GET /api/v1/features` entries (`name`, `tier`,
-`scope: "single"`, `symmetric: None`, `requires`) that the frontend's picker builds itself from.
+`catalog()` emits the `GET /api/v1/features` entries (`name`, `tier`, `scope: "single"`,
+`symmetric: None`, `requires`, `approximate`) that the frontend's picker builds itself from.
+
+`approximate` is the odd one out: it is metadata for the *UI* rather than for the pipeline, and
+it exists because `specs_features.md` §11.1 obliges the results pane to mark parser-derived
+values as approximate. Which features those are is knowable only here — the clause, sentence and
+complexity groups read parse structure, the lexical and punctuation groups read tags and surface
+forms — so the backend declares the scope and the frontend renders the caveat. Publishing it is
+what keeps a hand-maintained list of twenty-one feature names out of the frontend, and what makes
+a new parser-derived feature arrive already disclosed.
 
 ---
 
@@ -828,6 +837,11 @@ decision. Those invariants are checked, not merely documented.
 **Fits an existing signal** — two steps: write the `FeatureComputer` subclass with the right
 `requires`, add it to `_COMPUTERS` in `features/registry.py`. The catalog endpoint, tier
 selection, `feature_names` override and signal scheduling all pick it up automatically.
+
+The one thing that is not automatic is `approximate`: a Tier 1 feature reading dependency-parse
+structure must set it to `True`, or it reaches the results pane presented as exact. The equality
+assertion in `tests/test_api_tier1.py::test_catalog_marks_exactly_the_parser_derived_features_approximate`
+is what catches the omission.
 
 **Needs a new signal** — three steps: add the name constant to `signals/base.py`, write the
 `SignalExtractor` (declaring `depends_on` and `models`) and register it in `signals/registry.py`,

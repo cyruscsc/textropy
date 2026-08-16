@@ -95,6 +95,7 @@ class MddMean(FeatureComputer):
     name = "mdd_mean"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return mean(mdd_series(ctx.get(SPACY_DOC)))
@@ -104,6 +105,7 @@ class MddStdev(FeatureComputer):
     name = "mdd_stdev"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return stdev(mdd_series(ctx.get(SPACY_DOC)))
@@ -113,6 +115,7 @@ class DependencyDepthMean(FeatureComputer):
     name = "dependency_depth_mean"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return mean(depth_series(ctx.get(SPACY_DOC)))
@@ -122,6 +125,7 @@ class DependencyDepthStdev(FeatureComputer):
     name = "dependency_depth_stdev"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return stdev(depth_series(ctx.get(SPACY_DOC)))
@@ -131,6 +135,7 @@ class PhrasalElaborationMean(FeatureComputer):
     name = "phrasal_elaboration_mean"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return mean(elaboration_series(ctx.get(SPACY_DOC)))
@@ -140,6 +145,7 @@ class PhrasalElaborationStdev(FeatureComputer):
     name = "phrasal_elaboration_stdev"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> float:
         return stdev(elaboration_series(ctx.get(SPACY_DOC)))

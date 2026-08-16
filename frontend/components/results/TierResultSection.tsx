@@ -13,14 +13,19 @@ export default function TierResultSection({
   tier,
   block,
   defaultOpen = true,
+  isApproximate = () => false,
 }: {
   tier: number;
   block: TierBlock;
   defaultOpen?: boolean;
+  /** Catalog-backed predicate, supplied by `ResultsPane` (specs_features.md §11.1). */
+  isApproximate?: (name: string) => boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const entries = Object.entries(block);
   if (entries.length === 0) return null;
+
+  const approximateCount = entries.filter(([name]) => isApproximate(name)).length;
 
   return (
     <section className="border-border border-b last:border-b-0">
@@ -49,8 +54,28 @@ export default function TierResultSection({
         <div className="overflow-hidden">
           <div className="pb-3 pl-6">
             {entries.map(([name, value]) => (
-              <MetricRow key={name} name={name} value={value} />
+              <MetricRow
+                key={name}
+                name={name}
+                value={value}
+                approximate={isApproximate(name)}
+              />
             ))}
+
+            {/*
+              specs_features.md §11.1 — the disclosure Decision 5 committed to. Scoped to
+              the sections that actually contain marked rows, so a tier of exact metrics
+              never carries a caveat that does not apply to it.
+            */}
+            {approximateCount > 0 ? (
+              <p className="border-border text-ink-muted mt-2 border-t pt-2 text-xs leading-relaxed">
+                <span className="font-mono">≈</span> Derived from the dependency parse.
+                Textropy parses with <span className="font-mono">en_core_web_sm</span>,
+                which mis-reads some ordinary relative and subordinate clauses, so these{" "}
+                <span className="font-mono">{approximateCount}</span> values are
+                approximate rather than authoritative.
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

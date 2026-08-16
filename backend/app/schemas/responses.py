@@ -34,6 +34,11 @@ class FeatureCatalogEntry(BaseModel):
     scope: Literal["single", "comparison"]
     symmetric: bool | None = None
     requires: list[str] = Field(default_factory=list)
+    #: Parser-derived, so only as accurate as `en_core_web_sm`'s parse
+    #: (specs_features.md §10). The frontend marks these values as approximate in the
+    #: results pane, which is §11.1's disclosure obligation. Comparison features do not
+    #: set it and fall back to the default.
+    approximate: bool = False
 
 
 class FeatureCatalogResponse(BaseModel):

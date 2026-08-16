@@ -50,6 +50,7 @@ class InfinitiveClauseCount(FeatureComputer):
     name = "infinitive_clause_count"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> int:
         return sum(1 for token in ctx.get(SPACY_DOC) if is_infinitive_clause(token))
@@ -61,6 +62,7 @@ class NounClauseCount(FeatureComputer):
     name = "noun_clause_count"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> int:
         return count_clause_deps(ctx.get(SPACY_DOC), NOUN_CLAUSE_DEPS)
@@ -72,6 +74,7 @@ class AdjectiveClauseCount(FeatureComputer):
     name = "adjective_clause_count"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> int:
         return count_clause_deps(ctx.get(SPACY_DOC), ADJECTIVE_CLAUSE_DEPS)
@@ -81,6 +84,7 @@ class AdverbialClauseCount(FeatureComputer):
     name = "adverbial_clause_count"
     tier = 1
     requires = (SPACY_DOC,)
+    approximate = True
 
     def compute(self, ctx: AnalysisContext) -> int:
         return count_clause_deps(ctx.get(SPACY_DOC), ADVERBIAL_CLAUSE_DEPS)

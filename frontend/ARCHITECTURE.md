@@ -514,7 +514,7 @@ clips long content or makes short content ease slowly.
 
 `MetricRow` is the load-bearing component of the results pane. Backend feature values are open
 JSON (`types.ts:48-54`), so it branches on **runtime shape**, never on the feature name
-(`MetricRow.tsx:47-85`):
+(`MetricRow.tsx:76-124`):
 
 | Shape | Test | Render |
 |---|---|---|
@@ -526,13 +526,43 @@ This is why `{label: "positive", score: 0.99}` and `{a_given_b: 24.7, b_given_a:
 display correctly with zero per-feature code — they are objects, and the component recurses.
 
 Value-derived styling follows the same rule. `polarityOf` (`format.ts:60`) colours a value green
-or red if the *value string* reads `positive` / `negative` (`MetricRow.tsx:17`), so any future
+or red if the *value string* reads `positive` / `negative` (`MetricRow.tsx:39`), so any future
 polarity-bearing feature is coloured for free, and a feature *named* something sentiment-like but
 returning a number is not miscoloured.
 
 The unavailable branch is the frontend half of the backend's optional-model degradation path
 (§13.4): one feature renders an "Unavailable" row while every other feature in the tier renders
 normally. Request-level failure is a different thing entirely and surfaces as the `error` state.
+
+### The one thing a row cannot derive from its own value
+
+`specs_features.md` §11.1 obliges the results pane to mark parser-derived values as approximate:
+Tier 1 parses with `en_core_web_sm`, which mis-reads some ordinary relative and subordinate
+clauses, so the clause, sentence and complexity groups are only as good as that parse. Nothing in
+`4.0` or `{simple: 3}` says which group produced it, so this is the one fact `MetricRow` cannot
+recover by inspecting a value.
+
+The resolution keeps the rule intact rather than bending it. **The scope is published, and the
+flag is passed in.** `GET /api/v1/features` carries a per-feature `approximate` boolean;
+`ResultsPane` turns the catalog into an `isApproximate` predicate and threads it through
+`TieredBlocks` → `TierResultSection` → `MetricRow`, which renders a `≈` footnote marker for a flag
+it is *handed*. No name-to-behaviour map is added to any component, and no list of the twenty-one
+affected features exists in the frontend — which is what stops the caveat silently going missing
+the next time the backend adds a parser-derived feature.
+
+Two deliberate choices in the presentation:
+
+- **A marker per row, not one note per pane.** The obligation is that a reader looking at
+  `complex_sentence_density` sees *that number* is approximate. A footnote at the bottom of the
+  pane does not attach to anything. `TierResultSection` renders the matching footnote, and only
+  when that section actually contains marked rows — a tier of exact metrics never carries a
+  caveat that does not apply to it.
+- **A missing catalog is disclosed, not silently ignored.** A stored history entry renders against
+  whatever catalog the current session loaded, so if the catalog fetch failed the markers would
+  vanish from values that still need them — the results themselves come from `localStorage` and
+  render fine. `ResultsPane` detects the empty catalog and says the markers are unavailable.
+  §11.1 forbids presenting these values as authoritative, which is a stronger requirement than
+  merely rendering them.
 
 Two smaller details in the same pane:
 
@@ -546,9 +576,9 @@ Two smaller details in the same pane:
   computation being gated on the section actually being open (`ComparisonDiffView.tsx:86`).
 
 **Known wart:** `MetricRow`'s `depth` prop is never passed a non-zero value — neither
-`TierResultSection.tsx:52` nor the recursive call at `MetricRow.tsx:71` supplies it — so
+`TierResultSection.tsx:57` nor the recursive call at `MetricRow.tsx:105` supplies it — so
 `paddingLeft: depth * 16` is always `0`. Nesting is actually conveyed by the `border-l pl-3`
-wrapper at `MetricRow.tsx:68`. The prop is vestigial; either thread it through or delete it, but
+wrapper at `MetricRow.tsx:103`. The prop is vestigial; either thread it through or delete it, but
 do not assume it is currently doing anything.
 
 ---
@@ -649,7 +679,7 @@ useAnalysisState mount
 |---|---|---|
 | Panes never copy controller values into local state | Single-prop wiring; nothing else to copy from | The three-pane drift §11 exists to prevent |
 | Only `AnalysisFormPane` mutates mode/text/selection | Convention, visible by grepping `controller.set*` | Two writers race; the form shows one thing and the request sends another |
-| No feature name appears in a component | Catalog-driven picker + shape-based rendering | A backend feature silently fails to appear, or renders wrongly |
+| No feature name appears in a component | Catalog-driven picker + shape-based rendering; per-feature metadata (`approximate`) arrives as a prop | A backend feature silently fails to appear, renders wrongly, or loses a caveat it is owed |
 | `getSnapshot` returns a referentially stable value | The `cache` at `history.ts:73` | Infinite render loop |
 | No `setState` synchronously in an effect body | `catalogAttempt` retry key pattern | React 19 lint error; cascading renders |
 | No ref reads during render | `setMode` depends on `textB` instead of a ref | React 19 lint error; stale closure bugs |
@@ -667,8 +697,15 @@ until the two disagree.
 ## 16. Adding to the UI: the common paths
 
 **A new backend feature** — nothing to do. It arrives in the catalog, the picker renders it in its
-tier and scope, and `MetricRow` renders whatever shape it returns. Add an entry to `ACRONYMS`
-(`format.ts:10`) only if its name contains an initialism that title-casing would mangle.
+tier and scope, `MetricRow` renders whatever shape it returns, and it picks up the approximate
+marker automatically if the backend flagged it. Add an entry to `ACRONYMS` (`format.ts:10`) only
+if its name contains an initialism that title-casing would mangle.
+
+**A new piece of per-feature metadata** (something true of a feature rather than of its value) —
+add it to the catalog on the backend, widen `FeatureCatalogEntry` (`types.ts:16`), and derive a
+predicate in `ResultsPane` to thread down as a prop. `approximate` is the worked example. Do not
+put the mapping in `MetricRow`: the moment a component decides behaviour from a feature *name*,
+adding a backend feature stops being a zero-frontend-change operation.
 
 **A new shared value** (something two panes must agree on) — add it to the `AnalysisController`
 interface (`useAnalysisState.ts:57`), produce it in the hook, return it. Derive it rather than

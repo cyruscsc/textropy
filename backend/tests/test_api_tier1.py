@@ -83,6 +83,47 @@ def test_catalog_covers_every_spec_feature(client):
     assert by_name["levenshtein"]["symmetric"] is True
 
 
+def test_catalog_marks_exactly_the_parser_derived_features_approximate(client):
+    """specs_features.md §11.1 — the flag the UI's disclosure keys off.
+
+    The set is pinned rather than spot-checked because the obligation is scoped by group,
+    not by feature: the clause (§3), sentence (§4) and complexity (§6) groups are
+    parse-structure readers and every one of them must carry the caveat, while lexical
+    (§2) and punctuation (§5) read tags and surface forms and must not. A new feature
+    landing in the wrong half fails here rather than silently reaching the results pane
+    with the wrong caveat.
+    """
+    features = client.get("/api/v1/features").json()["features"]
+    approximate = {f["name"] for f in features if f["approximate"]}
+
+    assert approximate == {
+        # §3 — clause
+        "infinitive_clause_count",
+        "noun_clause_count",
+        "adjective_clause_count",
+        "adverbial_clause_count",
+        # §4 — sentence
+        "sentence_count",
+        "simple_sentence_count",
+        "simple_sentence_density",
+        "compound_sentence_count",
+        "compound_sentence_density",
+        "complex_sentence_count",
+        "complex_sentence_density",
+        "compound_complex_sentence_count",
+        "compound_complex_sentence_density",
+        "sentence_length_mean",
+        "sentence_length_stdev",
+        # §6 — complexity
+        "mdd_mean",
+        "mdd_stdev",
+        "dependency_depth_mean",
+        "dependency_depth_stdev",
+        "phrasal_elaboration_mean",
+        "phrasal_elaboration_stdev",
+    }
+
+
 def test_single_mode_tier1(client):
     response = client.post(
         "/api/v1/analyze",

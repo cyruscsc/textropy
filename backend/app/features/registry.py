@@ -12,8 +12,12 @@ from typing import Any
 from app.features.base import FeatureComputer
 from app.features.tier1.lexical import (
     ContentWordCount,
+    ContentWordDensity,
     FunctionWordCount,
+    FunctionWordDensity,
+    LemmaCount,
     TypeTokenRatio,
+    UniqueLemmaCount,
     UniqueWordCount,
     WordCount,
 )
@@ -27,8 +31,12 @@ _COMPUTERS: tuple[FeatureComputer, ...] = (
     # Tier 1 — spaCy doc only
     WordCount(),
     UniqueWordCount(),
+    LemmaCount(),
+    UniqueLemmaCount(),
     ContentWordCount(),
     FunctionWordCount(),
+    ContentWordDensity(),
+    FunctionWordDensity(),
     TypeTokenRatio(),
     # Tier 2
     Sentiment(),

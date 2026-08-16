@@ -38,10 +38,10 @@ curl -s localhost:8000/api/v1/analyze -H 'content-type: application/json' \
 
 ## The problem this architecture solves
 
-Most of the 20 features share underlying work. All five Tier 1 features want a spaCy parse.
+Most of the 24 features share underlying work. All nine Tier 1 features want a spaCy parse.
 Perplexity and mean surprisal both want DistilGPT2 token log-probabilities. Cohesion and
 comparison-mode semantic similarity both want sentence embeddings. A naive implementation
-where each feature extracts what it needs would parse the same text five times and run
+where each feature extracts what it needs would parse the same text nine times and run
 DistilGPT2 twice per request.
 
 The usual fix is a cache. The MVP deliberately has none — no Redis, and no in-process memo
@@ -128,10 +128,12 @@ time from whatever was selected.
 4. **Run** each extractor once, storing results on the context.
 5. **Run** the feature computers, which only read.
 
-Worked example — `{"tiers": [1, 3]}` selects seven computers:
+Worked example — `{"tiers": [1, 3]}` selects eleven computers:
 
 ```
-word_count, unique_word_count, content_word_count, function_word_count, ttr
+word_count, unique_word_count, lemma_count, unique_lemma_count,
+content_word_count, function_word_count, content_word_density,
+function_word_density, ttr
                                               requires  {spacy.doc}
 perplexity                                    requires  {lm.token_logprobs}
 mean_surprisal                                requires  {lm.token_logprobs, spacy.doc,
@@ -146,8 +148,9 @@ resolve_order (topological) ─────────────────�
   3. alignment.lm_to_spacy  ← depends on both, so it must come last
 ```
 
-One parse and one DistilGPT2 pass, for seven features. Add a sixth Tier 1 feature tomorrow
-and the count does not change.
+One parse and one DistilGPT2 pass, for eleven features. Four Tier 1 features (the lemma pair
+and the density pair) were added after this document was first written, and the extractor
+count did not move — which is the property the design buys.
 
 Step 3 also means a computer can depend on a *derived* signal without knowing what that
 signal is built from: `mean_surprisal` asks for `alignment.lm_to_spacy` and the resolver works
@@ -166,8 +169,12 @@ topological order, cycle detection — so they are checked, not just documented.
 |---|---|---|---|
 | 1 | `word_count` | `spacy.doc` | punctuation and whitespace excluded |
 | 1 | `unique_word_count` | `spacy.doc` | distinct lowercased forms |
+| 1 | `lemma_count` | `spacy.doc` | word tokens carrying a lemma — equals `word_count` on ordinary prose |
+| 1 | `unique_lemma_count` | `spacy.doc` | distinct lemmas; `<= unique_word_count`, since inflection collapses |
 | 1 | `content_word_count` | `spacy.doc` | POS in `{NOUN, PROPN, VERB, ADJ, ADV}` |
 | 1 | `function_word_count` | `spacy.doc` | the complement of the above |
+| 1 | `content_word_density` | `spacy.doc` | `content_word_count / word_count`; lexical density |
+| 1 | `function_word_density` | `spacy.doc` | `function_word_count / word_count`; sums to 1 with the above |
 | 1 | `ttr` | `spacy.doc` | type-token ratio = unique / total |
 | 2 | `sentiment` | `sentiment.document` | `{label, score}` from DistilBERT SST-2 |
 | 2 | `coreference` | `coref.clusters` | `{chain_count}` from fastcoref |

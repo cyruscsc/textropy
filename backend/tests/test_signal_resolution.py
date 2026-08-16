@@ -20,9 +20,14 @@ from app.signals.base import (
 
 
 def test_all_tier1_features_need_only_one_signal():
-    """The headline claim of spec §3.1: five features, one parse."""
+    """The headline claim of spec §3.1: every Tier 1 feature, one parse.
+
+    Deliberately not pinned to a feature count — adding a Tier 1 feature must not fail
+    this test, but adding one that drags in a second signal must.
+    """
     computers = feature_registry.select(tiers=[1])
-    assert len(computers) == 5
+    assert len(computers) > 1, "guard against the selection silently returning nothing"
+    assert {c.tier for c in computers} == {1}
 
     required = feature_registry.required_signals(computers)
     assert required == {SPACY_DOC}

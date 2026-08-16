@@ -29,9 +29,9 @@ each feature computes. This one assumes you have read it and are about to change
 
 ## 1. The problem the architecture solves
 
-Twenty features share a small number of expensive underlying computations:
+Twenty-four features share a small number of expensive underlying computations:
 
-- All five Tier 1 features need a spaCy parse.
+- All nine Tier 1 features need a spaCy parse.
 - `perplexity` and `mean_surprisal` both need DistilGPT2 log-probs.
 - `cohesion` (single) and `semantic_similarity` (comparison) both need MiniLM sentence vectors.
 - `ngram_overlap`, `pos_divergence` and `dep_divergence` need the same spaCy parse the Tier 1
@@ -393,8 +393,12 @@ redundant computation the multi-pass design exists to prevent."*
 |---|---|---|---|
 | `word_count` | 1 | `spacy.doc` | `int` |
 | `unique_word_count` | 1 | `spacy.doc` | `int` (over `t.lower_`) |
+| `lemma_count` | 1 | `spacy.doc` | `int` (over `lemma_forms`) |
+| `unique_lemma_count` | 1 | `spacy.doc` | `int` (distinct lemmas) |
 | `content_word_count` | 1 | `spacy.doc` | `int` (POS ∈ `CONTENT_POS`) |
 | `function_word_count` | 1 | `spacy.doc` | `int` (POS ∉ `CONTENT_POS`) |
+| `content_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
+| `function_word_density` | 1 | `spacy.doc` | `float`, `0.0` on empty |
 | `ttr` | 1 | `spacy.doc` | `float`, `0.0` on empty |
 | `sentiment` | 2 | `sentiment.document` | `{label, score}` |
 | `coreference` | 2 | `coref.clusters` | `{chain_count}` |
@@ -406,12 +410,27 @@ Notice how thin most of them are. `Sentiment.compute` is one `ctx.get` and a dic
 thinness is the evidence the split worked: the expensive part moved to Pass 1, so Pass 2 is pure
 shaping.
 
+The two lemma computers share a `lemma_forms(doc)` helper local to `tier1/lexical.py`, which
+lowercases the lemma of each word token and drops blanks. The filtering lives in the helper
+rather than in each computer so that `unique_lemma_count <= lemma_count` holds by
+construction — split the filter across two computers and a blank lemma would break the
+relationship on exactly the inputs nobody tests. It stays module-local rather than joining
+`word_tokens` in `spacy_extractor.py` because nothing outside this module needs it yet;
+promote it if a comparison computer ever does.
+
 Two computers encode a `None`-vs-`0.0` judgment worth understanding:
 
 - **`cohesion`** returns `mean_adjacent_similarity: None` for a single sentence. Adjacent
   similarity is *undefined* with one sentence; `0.0` would read as "maximally incohesive".
 - **`perplexity`** returns `None` when fewer than two subword tokens exist — nothing was ever
   conditioned.
+
+The Tier 1 ratios go the *other* way for the same kind of undefined case: `ttr`,
+`content_word_density` and `function_word_density` all answer `0.0` when there are no word
+tokens, via `_density`. That is not an oversight to reconcile — `ttr` set the precedent, the
+three share a denominator, and returning null from one Tier 1 ratio while another returns
+zero for identical input would be worse than either choice made consistently. Punctuation-only
+text ("...") is the only way to reach it, since blank text is rejected at 422.
 
 `cohesion`'s actual math exploits the pre-normalisation:
 
@@ -614,17 +633,22 @@ POST /api/v1/analyze
   └─ AnalysisService.analyze_text(text, 0, tiers=[1,3])
        │
        ├─ 1. plan() → feature_registry.select(tiers=[1,3])
-       │       → [WordCount, UniqueWordCount, ContentWordCount,
-       │          FunctionWordCount, TypeTokenRatio, Perplexity, MeanSurprisal]
+       │       → [WordCount, UniqueWordCount, LemmaCount, UniqueLemmaCount,
+       │          ContentWordCount, FunctionWordCount, ContentWordDensity,
+       │          FunctionWordDensity, TypeTokenRatio, Perplexity, MeanSurprisal]
        │
        ├─ 2. required_signals(computers)  ← SET UNION over `requires`
-       │       word_count          → {spacy.doc}
-       │       unique_word_count   → {spacy.doc}          ─┐
-       │       content_word_count  → {spacy.doc}           ├─ collapse to ONE entry
-       │       function_word_count → {spacy.doc}           │
-       │       ttr                 → {spacy.doc}          ─┘
-       │       perplexity          → {lm.token_logprobs}
-       │       mean_surprisal      → {lm.token_logprobs, spacy.doc, alignment.lm_to_spacy}
+       │       word_count            → {spacy.doc}          ─┐
+       │       unique_word_count     → {spacy.doc}           │
+       │       lemma_count           → {spacy.doc}           │
+       │       unique_lemma_count    → {spacy.doc}           │
+       │       content_word_count    → {spacy.doc}           ├─ collapse to ONE entry
+       │       function_word_count   → {spacy.doc}           │
+       │       content_word_density  → {spacy.doc}           │
+       │       function_word_density → {spacy.doc}           │
+       │       ttr                   → {spacy.doc}          ─┘
+       │       perplexity            → {lm.token_logprobs}
+       │       mean_surprisal        → {lm.token_logprobs, spacy.doc, alignment.lm_to_spacy}
        │       ────────────────────────────────────────────────────────────────
        │       union = {spacy.doc, lm.token_logprobs, alignment.lm_to_spacy}
        │
@@ -652,7 +676,7 @@ iterates `sorted(set(required))`, which is
 `lm.token_logprobs` to the output before appending itself. The sort determines which root is
 *visited* first; the `depends_on` tuple order determines the actual emitted order.
 
-Then Pass 2 runs, and `spacy.doc` was parsed exactly once for seven features — with no cache
+Then Pass 2 runs, and `spacy.doc` was parsed exactly once for eleven features — with no cache
 anywhere in the system.
 
 ---

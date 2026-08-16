@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 TEXT_A = "The cat sat on the mat. It was a comfortable mat."
 TEXT_B = "A feline rested upon the rug. The rug was pleasant."
 
@@ -18,12 +20,16 @@ def test_catalog_covers_every_spec_feature(client):
     features = client.get("/api/v1/features").json()["features"]
     by_name = {f["name"]: f for f in features}
 
-    # Spec §3.1 single-text
+    # Spec §3.1 single-text, plus the lemma pair added after the MVP spec was written
     assert {
         "word_count",
         "unique_word_count",
+        "lemma_count",
+        "unique_lemma_count",
         "content_word_count",
         "function_word_count",
+        "content_word_density",
+        "function_word_density",
         "ttr",
         "sentiment",
         "coreference",
@@ -70,6 +76,73 @@ def test_single_mode_tier1(client):
     assert 0 < tier1["ttr"] <= 1
     # Only the requested tier is present.
     assert set(body["results"][0]["features"]) == {"tier1"}
+
+
+def test_lemma_counts_collapse_inflection(client):
+    # dogs/dog and barked/barks are two surface types each, but one lemma each. Kept
+    # mid-sentence on purpose: en_core_web_sm tags a capitalised sentence-initial plural
+    # as PROPN and then leaves its lemma uninflected, which would test the tagger's
+    # quirks rather than these features.
+    tier1 = client.post(
+        "/api/v1/analyze",
+        json={"mode": "single", "texts": ["The dogs barked and a dog barks."], "tiers": [1]},
+    ).json()["results"][0]["features"]["tier1"]
+
+    assert tier1["word_count"] == 7
+    assert tier1["unique_word_count"] == 7
+    assert tier1["unique_lemma_count"] == 5  # the, dog, bark, and, a
+
+
+def test_lemma_count_tracks_word_count_on_prose(client):
+    """Pinning the documented relationship, not an independent quantity.
+
+    spaCy assigns one lemma per token, so `lemma_count` only differs from `word_count`
+    where the lemmatizer returns a blank. If `lemma_forms` ever changes what it filters,
+    this is the test that says so.
+    """
+    tier1 = client.post(
+        "/api/v1/analyze",
+        json={"mode": "single", "texts": [TEXT_A], "tiers": [1]},
+    ).json()["results"][0]["features"]["tier1"]
+
+    assert tier1["lemma_count"] == tier1["word_count"] == 11
+    # Holds for any text: lemmatisation merges types, never splits them.
+    assert tier1["unique_lemma_count"] <= tier1["unique_word_count"]
+
+
+def test_word_densities_match_their_counts(client):
+    tier1 = client.post(
+        "/api/v1/analyze",
+        json={"mode": "single", "texts": [TEXT_A], "tiers": [1]},
+    ).json()["results"][0]["features"]["tier1"]
+
+    assert tier1["content_word_density"] == pytest.approx(
+        tier1["content_word_count"] / tier1["word_count"], abs=1e-4
+    )
+    assert tier1["function_word_density"] == pytest.approx(
+        tier1["function_word_count"] / tier1["word_count"], abs=1e-4
+    )
+    # Content and function words partition the word tokens, so the densities complete.
+    assert tier1["content_word_density"] + tier1["function_word_density"] == pytest.approx(
+        1.0, abs=1e-4
+    )
+
+
+def test_densities_are_zero_when_a_text_has_no_words(client):
+    """Punctuation-only input is the one way to reach the 0/0 case.
+
+    Blank text is rejected at 422, so this is the reachable edge — and the answer must
+    match `ttr`, which returns 0.0 for the same input rather than null.
+    """
+    tier1 = client.post(
+        "/api/v1/analyze",
+        json={"mode": "single", "texts": ["..."], "tiers": [1]},
+    ).json()["results"][0]["features"]["tier1"]
+
+    assert tier1["word_count"] == 0
+    assert tier1["content_word_density"] == 0.0
+    assert tier1["function_word_density"] == 0.0
+    assert tier1["ttr"] == 0.0
 
 
 def test_compare_mode_tier1(client):

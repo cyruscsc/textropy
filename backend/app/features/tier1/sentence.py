@@ -18,7 +18,7 @@ from app.features.base import FeatureComputer
 from app.features.tier1.stats import mean, ratio, stdev
 from app.pipeline.context import AnalysisContext
 from app.signals.base import SPACY_DOC
-from app.signals.spacy_extractor import word_tokens
+from app.signals.spacy_extractor import content_sentences, word_tokens
 
 # §4.1. Named rather than inlined so the spec's definitions stay greppable and a mistyped
 # label reads as a wrong-looking constant instead of a silently-zero count.
@@ -37,16 +37,6 @@ SIMPLE = "simple"
 COMPOUND = "compound"
 COMPLEX = "complex"
 COMPOUND_COMPLEX = "compound_complex"
-
-
-def content_sentences(doc: Any) -> list[Any]:
-    """Sentence spans holding at least one word token.
-
-    A span of only punctuation or whitespace is not a sentence for counting purposes — `"..."`
-    parses as one such span, and letting it through would inflate `sentence_count` and skew
-    every mean and stdev built on the same series.
-    """
-    return [sent for sent in doc.sents if word_tokens(sent)]
 
 
 def is_finite(token: Any) -> bool:

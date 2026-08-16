@@ -50,6 +50,13 @@ def test_catalog_covers_every_spec_feature(client):
         "internal_punctuation_ratio",
         "terminal_punctuation_count",
         "terminal_punctuation_ratio",
+        # §6 — complexity group
+        "mdd_mean",
+        "mdd_stdev",
+        "dependency_depth_mean",
+        "dependency_depth_stdev",
+        "phrasal_elaboration_mean",
+        "phrasal_elaboration_stdev",
         "sentiment",
         "coreference",
         "cohesion",

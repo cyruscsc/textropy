@@ -16,6 +16,14 @@ from app.features.tier1.clause import (
     InfinitiveClauseCount,
     NounClauseCount,
 )
+from app.features.tier1.complexity import (
+    DependencyDepthMean,
+    DependencyDepthStdev,
+    MddMean,
+    MddStdev,
+    PhrasalElaborationMean,
+    PhrasalElaborationStdev,
+)
 from app.features.tier1.lexical import (
     ContentWordCount,
     ContentWordDensity,
@@ -87,6 +95,13 @@ _COMPUTERS: tuple[FeatureComputer, ...] = (
     InternalPunctuationRatio(),
     TerminalPunctuationCount(),
     TerminalPunctuationRatio(),
+    # Tier 1 — complexity (specs_features.md §6)
+    MddMean(),
+    MddStdev(),
+    DependencyDepthMean(),
+    DependencyDepthStdev(),
+    PhrasalElaborationMean(),
+    PhrasalElaborationStdev(),
     # Tier 2
     Sentiment(),
     Coreference(),

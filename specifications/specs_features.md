@@ -341,10 +341,14 @@ keys under different names. The numerator is the terminal count, as above.
 
 ---
 
-## 6. Tier 1 — Complexity 📋
+## 6. Tier 1 — Complexity ✅
 
-New module: `app/features/tier1/complexity.py`. Three mean/stdev pairs, each over a different
-series. Every stdev follows §1.5.
+Implemented in `app/features/tier1/complexity.py`; tests in
+`tests/test_complexity_features.py`. Three mean/stdev pairs, each over a different series.
+Every stdev follows §1.5, via `tier1/stats.py`.
+
+Per-unit values (`mean_dependency_distance`, `tree_depth`, `phrasal_elaboration`) are returned
+unrounded; only the aggregating mean/stdev round, per §1.6.
 
 | Feature | Series | Type |
 |---|---|---|
@@ -454,8 +458,7 @@ comparable, not identical. Do not "reconcile" them.
 
 ### 9.1 Module layout
 
-Tier 1 currently holds one module. The four planned groups are large enough to warrant their
-own, matching the group headings here:
+Tier 1 is split by feature group, one module per §-heading above:
 
 ```
 app/features/tier1/
@@ -464,10 +467,10 @@ app/features/tier1/
 ├── stats.py         ✅ ratio / mean / stdev (§1.4-1.6)
 ├── sentence.py      ✅ 11
 ├── punctuation.py   ✅ 5
-└── complexity.py    📋 6
+└── complexity.py    ✅ 6
 ```
 
-Each computer declares `requires = (SPACY_DOC,)` and is added to `_COMPUTERS` in
+All 35 are implemented. Each computer declares `requires = (SPACY_DOC,)` and is added to `_COMPUTERS` in
 `app/features/registry.py`. Nothing in `services/` changes, and `/api/v1/features` advertises
 new features automatically — the frontend picker builds itself from that endpoint, so no
 frontend change is needed either.
@@ -479,8 +482,9 @@ several groups need per-sentence series. Put shared predicates where their consu
 to a module while one module uses them, promoted to `signals/spacy_extractor.py` (alongside
 `word_tokens` and `CONTENT_POS`) only once a second module needs them.
 
-`content_sentences()` lives in `tier1/sentence.py` under that rule; §6 will be its second
-consumer, at which point it moves. The numeric conventions took the other path already:
+`content_sentences()` has now made that move: §6 became its second consumer, so it lives in
+`signals/spacy_extractor.py` beside `word_tokens` and `CONTENT_POS`, and one definition of "a
+sentence" serves both groups. The numeric conventions took the same path earlier:
 `tier1/stats.py` exists because §4 needed both a ratio and mean/stdev, and `lexical.py` had a
 private ratio of its own — two implementations of §1.4 is exactly the drift these conventions
 exist to prevent, so the lexical copy was folded into the shared one.
@@ -491,8 +495,8 @@ a typo is a wrong-looking constant rather than a silently-zero count.
 
 ### 9.3 Cost
 
-All 35 Tier 1 features in this document read the same `spacy.doc`. Adding every planned one adds
-**zero** model invocations and one parse per request, which is the property the multi-pass
+All 35 Tier 1 features read the same `spacy.doc`. Going from 5 features to 35 added **zero**
+model invocations and still costs one parse per request, which is the property the multi-pass
 architecture exists to preserve. See [`../backend/ARCHITECTURE.md`](../backend/ARCHITECTURE.md).
 
 ### 9.4 Testing
@@ -510,6 +514,7 @@ tests miss:
 - `internal_punctuation_count + terminal_punctuation_count == punctuation_count`
 - every ratio is `0.0` when its denominator is 0
 - every stdev is `0.0` for a single-element series
+- MDD, tree depth and phrasal elaboration agree with hand-computed arcs on a known parse
 
 ---
 
@@ -575,9 +580,10 @@ suggestions, and neither is satisfied by anything in the current codebase:
 - **UI disclosure — now outstanding.** Parser-derived features — every feature in §3, §4 and
   §6 — must be presented in the results pane with a visible note that they are approximate.
   The scope is exactly those three groups; the lexical group in §2 needs no caveat, since POS
-  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3 and §4 have shipped,
-  so this is due now**: fifteen parser-derived features are live in the API and reach the
-  results pane with no caveat attached. It is the one piece of Decision 5 that the backend cannot satisfy
+  tagging on `en_core_web_sm` is materially more reliable than its parsing. **§3, §4 and §6 have all shipped,
+  so this is due now and complete in scope**: twenty-one parser-derived features are live in
+  the API and reach the results pane with no caveat attached. No further backend work will
+  reduce it. It is the one piece of Decision 5 that the backend cannot satisfy
   on its own.
 - **Benchmark before any upgrade.** Compare `en_core_web_sm` against `en_core_web_md` on
   representative inputs, measuring both the accuracy gain on structural features and the cost in

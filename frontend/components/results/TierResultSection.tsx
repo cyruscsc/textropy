@@ -5,6 +5,7 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
+import ApproximateBadge from "@/components/results/ApproximateBadge";
 import MetricRow from "@/components/results/MetricRow";
 import { cn } from "@/lib/format";
 import type { TierBlock } from "@/lib/types";
@@ -69,7 +70,11 @@ export default function TierResultSection({
             */}
             {approximateCount > 0 ? (
               <p className="border-border text-ink-muted mt-2 border-t pt-2 text-xs leading-relaxed">
-                <span className="font-mono">≈</span> Derived from the dependency parse.
+                {/*
+                  The same chip the marked rows carry, not a bare glyph — this line is its
+                  legend, so the two have to look identical or the key stops reading as one.
+                */}
+                <ApproximateBadge /> Derived from the dependency parse.
                 Textropy parses with <span className="font-mono">en_core_web_sm</span>,
                 which mis-reads some ordinary relative and subordinate clauses, so these{" "}
                 <span className="font-mono">{approximateCount}</span> values are

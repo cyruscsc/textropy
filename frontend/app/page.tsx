@@ -13,14 +13,17 @@
  */
 
 import { PanelLeftOpen, Plus } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import AnalysisFormPane from "@/components/analysis-form/AnalysisFormPane";
 import HistoryPane from "@/components/history/HistoryPane";
 import ResultsPane from "@/components/results/ResultsPane";
+import PaneDivider from "@/components/shared/PaneDivider";
 import Toast from "@/components/shared/Toast";
 import { cn } from "@/lib/format";
 import {
+  getAnalysisPanePercentServerSnapshot,
+  getAnalysisPanePercentSnapshot,
   getHistoryVisibleServerSnapshot,
   getHistoryVisibleSnapshot,
   setHistoryVisible,
@@ -52,6 +55,15 @@ export default function Page() {
     getHistoryVisibleServerSnapshot,
   );
 
+  /** Width of the Analysis pane; the divider moves it and Results absorbs the rest. */
+  const analysisPercent = useSyncExternalStore(
+    subscribe,
+    getAnalysisPanePercentSnapshot,
+    getAnalysisPanePercentServerSnapshot,
+  );
+  const rowRef = useRef<HTMLDivElement>(null);
+  const analysisRef = useRef<HTMLElement>(null);
+
   /** Hidden unless active below `lg`; always laid out at `lg` and above. */
   const paneVisibility = (id: Tab) => (tab === id ? "flex" : "hidden lg:flex");
 
@@ -82,7 +94,23 @@ export default function Page() {
         ))}
       </nav>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      {/*
+        Pane widths live in CSS variables on the row so the divider can drag one by
+        touching a single property, and so `--history-w` has exactly one definition to
+        feed both the History column and the Analysis pane's max-width calc. Custom
+        properties are inert until a rule uses them, and every rule that does is
+        `lg:`-scoped, so none of this reaches the stacked tab layout below `lg`.
+      */}
+      <div
+        ref={rowRef}
+        style={
+          {
+            "--analysis-w": `${analysisPercent}%`,
+            "--history-w": historyVisible ? "280px" : "40px",
+          } as React.CSSProperties
+        }
+        className="flex min-h-0 flex-1 flex-col lg:flex-row"
+      >
         {/*
           The collapsed pane's stand-in: the History header compressed to its two icons, in
           the same order and with the same `gap-4` between them. "New analysis" earns its
@@ -93,7 +121,7 @@ export default function Page() {
         <div
           className={cn(
             historyVisible ? "hidden" : "hidden lg:flex",
-            "bg-surface border-border w-10 shrink-0 flex-col items-center gap-4 border-r pt-6",
+            "bg-surface border-border w-[var(--history-w)] shrink-0 flex-col items-center gap-4 border-r pt-6",
           )}
         >
           <button
@@ -138,7 +166,7 @@ export default function Page() {
             historyVisible
               ? cn(
                   paneVisibility("history"),
-                  "border-border min-h-0 w-full flex-1 flex-col lg:w-[280px] lg:flex-none lg:border-r",
+                  "border-border min-h-0 w-full flex-1 flex-col lg:w-[var(--history-w)] lg:flex-none lg:border-r",
                 )
               : cn(
                   tab === "history" ? "flex lg:hidden" : "hidden",
@@ -154,21 +182,28 @@ export default function Page() {
 
         <section
           id="pane-analyze"
+          ref={analysisRef}
           aria-label="Analysis configuration"
           className={cn(
             paneVisibility("analyze"),
-            "border-border min-h-0 w-full flex-1 flex-col lg:w-2/5 lg:flex-none lg:border-r",
+            "border-border min-h-0 w-full flex-1 flex-col lg:w-[var(--analysis-w)] lg:max-w-[calc(100%-var(--history-w)-321px)] lg:min-w-[360px] lg:flex-none",
           )}
         >
           <AnalysisFormPane controller={controller} />
         </section>
+
+        <PaneDivider
+          percent={analysisPercent}
+          rowRef={rowRef}
+          analysisRef={analysisRef}
+        />
 
         <section
           id="pane-results"
           aria-label="Results"
           className={cn(
             paneVisibility("results"),
-            "min-h-0 w-full flex-1 flex-col",
+            "min-h-0 w-full flex-1 flex-col lg:min-w-0",
           )}
         >
           <ResultsPane controller={controller} />

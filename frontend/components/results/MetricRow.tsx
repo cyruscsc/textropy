@@ -9,6 +9,7 @@
  * either being special-cased).
  */
 
+import ApproximateBadge from "@/components/results/ApproximateBadge";
 import { cn, formatMetricValue, humanizeFeatureName, polarityOf } from "@/lib/format";
 import type { FeatureValue } from "@/lib/types";
 import { isUnavailable, isValueGroup } from "@/lib/types";
@@ -23,14 +24,12 @@ import { isUnavailable, isValueGroup } from "@/lib/types";
 function ApproximateMark() {
   return (
     <>
-      <sup
-        aria-hidden
+      <ApproximateBadge
+        className="ml-1.5"
         title="Derived from the dependency parse — approximate."
-        className="text-ink-muted ml-0.5 font-mono text-[0.625rem]"
-      >
-        ≈
-      </sup>
-      <span className="sr-only"> (approximate)</span>
+      />
+      {/* The badge is aria-hidden, so a row's only non-visual caveat is this word. */}
+      <span className="sr-only"> approximate</span>
     </>
   );
 }

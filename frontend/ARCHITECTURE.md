@@ -506,6 +506,41 @@ There is no width animation, matching the tab swap above — `display: none` is 
 and the alternative (a `grid-template-columns` variant of `TierResultSection`'s `1fr`/`0fr` trick)
 is a lot of machinery for a once-a-session action.
 
+### The divider, and why the minimums are CSS
+
+The boundary between Analysis and Results is a draggable `role="separator"`
+(`components/shared/PaneDivider.tsx`). What it moves is the *Analysis* pane's width —
+Results is `flex-1` and takes the remainder, so widening Results means narrowing Analysis.
+
+Pane widths are CSS custom properties on the row (`--analysis-w`, `--history-w`), which buys
+two things: the drag can move a pane by touching one property, and `--history-w` has a single
+definition feeding both the History column and the max-width calc below. Custom properties are
+inert until a rule uses them and every consuming rule is `lg:`-scoped, so none of it reaches the
+stacked tab layout.
+
+**The pixel minimums are `min-width` / `max-width`, not JavaScript.** Analysis is floored at
+`360px` and capped at `calc(100% - var(--history-w) - 321px)` so Results always keeps 320px (the
+extra pixel is the divider itself). Because the cap is expressed against `100%` of the row, a
+window resize re-resolves it for free — no `ResizeObserver`, no clamp-on-resize effect. Verified:
+at a 1024px viewport with a stored 75%, Analysis renders 423px and Results exactly 320px with no
+overflow; collapsing History re-expands the cap to 663px in the same breath. The arithmetic holds
+at the `lg` floor because `280 + 360 + 320 < 1024`.
+
+Two consequences shaped the component, and both are easy to "simplify" back into bugs:
+
+- **The drag is a delta, not a position.** The value being set is the Analysis pane's *width*,
+  but a pointer's `clientX` is measured from the row's left edge — with History in between. Deriving
+  the width from the absolute position folds History's 280px into it and makes the pane jump on grab.
+- **Both the drag and the arrow keys re-baseline from the rendered width.** Once CSS clamps the
+  pane, the stored percentage and the real width diverge; stepping from the stored value would move
+  the number repeatedly while the pane sat still. Reading `getBoundingClientRect()` back after each
+  change removes that dead zone.
+
+A drag writes `--analysis-w` straight to the DOM rather than through React. Nothing in the three
+panes is memoised (§9), so routing pointer-move events through state would re-render 35 checkboxes
+and 35 metric rows every frame; instead React renders twice per drag and reconciles on release
+because it writes back the same value.
+
 `min-h-0` appears on every flex container in the chain (`page.tsx:66`, `:72`, `:83`, `:94`, and in
 each pane's root). It is required, not incidental — a flex child defaults to `min-height: auto`,
 which refuses to shrink below its content, so without it the inner `overflow-y-auto` never
@@ -611,6 +646,11 @@ Two deliberate choices in the presentation:
   pane does not attach to anything. `TierResultSection` renders the matching footnote, and only
   when that section actually contains marked rows — a tier of exact metrics never carries a
   caveat that does not apply to it.
+- **The marker and its legend are one component.** `ApproximateBadge` is rendered both beside
+  each marked metric and at the head of the footnote that explains it, because a legend that does
+  not look exactly like the thing it explains stops working as a legend. It is `aria-hidden` and
+  each caller supplies the accessible text — an `sr-only` word in a metric row, the sentence
+  itself in the footnote, so a screen reader never has to interpret a bare `≈`.
 - **A missing catalog is disclosed, not silently ignored.** A stored history entry renders against
   whatever catalog the current session loaded, so if the catalog fetch failed the markers would
   vanish from values that still need them — the results themselves come from `localStorage` and
@@ -639,7 +679,7 @@ do not assume it is currently doing anything.
 
 ## 13. State that deliberately stays local
 
-Six pieces of state are intentionally *not* in the controller:
+Seven pieces of state are intentionally *not* in the controller:
 
 | State | Owner | Why local |
 |---|---|---|
@@ -649,8 +689,9 @@ Six pieces of state are intentionally *not* in the controller:
 | Copy-confirmation flash | `CopyResultsButton.tsx:17` | Transient, 2s, nobody else cares |
 | Active tab | `page.tsx:34` | Layout, not analysis state |
 | Whether History is collapsed | `page.tsx` | Same — and no pane but History reads it |
+| Analysis/Results divider position | `page.tsx` | Same — a pane width, not an analysis input |
 
-The last of those is the only one that is *persisted* (`lib/preferences.ts`, §7). Persistence and
+The last two are the only ones that are *persisted* (`lib/preferences.ts`, §7). Persistence and
 ownership are separate questions: it survives a reload because a reader who collapsed the pane
 should not have to collapse it again, but no part of an analysis depends on it, so putting it in
 `AnalysisController` would widen that interface for nothing. Reading it through

@@ -65,9 +65,10 @@ below.
 ```
   app/layout.tsx                 server component: fonts + globals.css, nothing else
         │
-  app/page.tsx                   "use client" — calls the hook, owns tab state
+  app/page.tsx                   "use client" — calls the hook, owns layout state
         │   const controller = useAnalysisState()
-        │
+        │   ──────────────────────────────────────▶ lib/preferences.ts
+        │                                            (localStorage + external store)
         ├──────────────┬─────────────────────┬──────────────┐
         ▼              ▼                     ▼              ▼
   HistoryPane    AnalysisFormPane       ResultsPane       Toast
@@ -90,9 +91,11 @@ below.
 
 Three rules give the layering its teeth:
 
-1. **No component imports `api.ts` or `history.ts`.** Every network call and every storage write
-   goes through the hook. A component that fetched directly would be creating state the panes
-   cannot see.
+1. **No component imports `api.ts` or `history.ts`.** Every network call and every *analysis*
+   storage write goes through the hook. A component that fetched directly would be creating state
+   the panes cannot see. `lib/preferences.ts` is the deliberate exception and sits outside the
+   controller's subtree for that reason: it holds layout state that only `page.tsx` reads, so
+   routing it through the hook would put it in front of all three panes to no purpose (§13).
 2. **`lib/format.ts` and `lib/types.ts` are pure and import nothing from the app.** They are safe
    to use anywhere and impossible to make stateful.
 3. **`layout.tsx` is the only server component.** Everything below `page.tsx` is client-side,
@@ -337,6 +340,14 @@ both renders agree; `subscribe` attaches a `window "storage"` listener on the fi
 compares snapshots by reference; re-parsing JSON on every call returns a fresh array each time and
 loops forever. The cache is invalidated on write and on storage event, and nowhere else.
 
+`lib/preferences.ts` is a second store under the same contract, holding UI preferences rather than
+analysis data (today just whether the History pane is collapsed — §10, §13). It repeats the shape
+rather than importing it, because `history.ts` is hard-wired to `HistoryEntry[]` and its `storage()`
+guard is module-private; there was nothing to reuse without generalising a module whose defensive
+reads and quota handling are specific to what it stores. Its snapshots return **primitives**, so
+reference stability is free and its cache really is only an optimisation — the one meaningful
+difference between the two modules.
+
 ### Quota is an expected path, not an exception
 
 A single Tier 3 compare response is large enough that a full history can exceed the ~5MB budget.
@@ -451,6 +462,30 @@ elements that serve the mobile layout.
 There is no mobile component tree to keep in sync, which is the entire point: the failure mode for
 a responsive fallback built as a parallel tree is that it silently rots as the desktop layout
 evolves.
+
+### Collapsing History is a third arrangement, not a fourth tree
+
+The History pane can be collapsed to a ~40px rail (`page.tsx`, `HistoryPane.tsx`). The rail is the
+pane header compressed to its two icons in the same order — re-open, then "new analysis" — rather
+than a stub holding only the way back. The line for what belongs there is whether the action still
+means anything with the list hidden: resetting the form does, so it is on the rail; "Clear all" and
+the per-entry actions are *about* the list, so they are not.
+
+Three things keep this from becoming a second layout to maintain:
+
+- **It is `lg`-only.** Below `lg`, History is a *tab*; collapsing it there would strand every saved
+  analysis behind a control that is itself hidden. Both toggle buttons are `lg:`-classed and the
+  rail is `hidden lg:flex`.
+- **`HistoryPane` is never unmounted.** Collapsing swaps the `<section>`'s classes, so the pane
+  keeps its scroll position and stays reachable by the mobile tab. The collapsed branch is
+  `tab === "history" ? "flex lg:hidden" : "hidden"` — `hidden` at `lg` in both cases, still tabbable
+  below it. A conditional render would be the obvious "simplification" and would break exactly this.
+- **Each branch is one complete class string.** `cn` (`format.ts:110`) is a plain join with no
+  `tailwind-merge`, so a conditional `lg:w-0` layered over the static `lg:w-[280px]` would not win.
+
+There is no width animation, matching the tab swap above — `display: none` is not transitionable,
+and the alternative (a `grid-template-columns` variant of `TierResultSection`'s `1fr`/`0fr` trick)
+is a lot of machinery for a once-a-session action.
 
 `min-h-0` appears on every flex container in the chain (`page.tsx:66`, `:72`, `:83`, `:94`, and in
 each pane's root). It is required, not incidental — a flex child defaults to `min-height: auto`,
@@ -585,7 +620,7 @@ do not assume it is currently doing anything.
 
 ## 13. State that deliberately stays local
 
-Five pieces of state are intentionally *not* in the controller:
+Six pieces of state are intentionally *not* in the controller:
 
 | State | Owner | Why local |
 |---|---|---|
@@ -594,6 +629,14 @@ Five pieces of state are intentionally *not* in the controller:
 | Whether the diff is shown | `ComparisonDiffView.tsx:79` | Same, and it gates an expensive computation |
 | Copy-confirmation flash | `CopyResultsButton.tsx:17` | Transient, 2s, nobody else cares |
 | Active tab | `page.tsx:34` | Layout, not analysis state |
+| Whether History is collapsed | `page.tsx` | Same — and no pane but History reads it |
+
+The last of those is the only one that is *persisted* (`lib/preferences.ts`, §7). Persistence and
+ownership are separate questions: it survives a reload because a reader who collapsed the pane
+should not have to collapse it again, but no part of an analysis depends on it, so putting it in
+`AnalysisController` would widen that interface for nothing. Reading it through
+`useSyncExternalStore` rather than `useState` is what §7 requires of anything backed by
+`localStorage`, not a sign it is shared state.
 
 The line is: **if two panes must agree on it, it belongs in the controller; if it is one
 component's presentation, it stays local.** Hoisting these would grow the controller's surface

@@ -5,6 +5,7 @@
  * history list, the selected id, or the current results.
  */
 
+import { PanelLeftClose } from "lucide-react";
 import { Fragment } from "react";
 
 import ClearHistoryButton from "@/components/history/ClearHistoryButton";
@@ -28,15 +29,37 @@ function groupByDay(entries: HistoryEntry[]): [string, HistoryEntry[]][] {
 
 export default function HistoryPane({
   controller,
+  onHide,
 }: {
   controller: AnalysisController;
+  /**
+   * Collapses the pane to the rail in `page.tsx`. Layout state lives there, not here —
+   * this component only asks for the change.
+   */
+  onHide: () => void;
 }) {
   const groups = groupByDay(controller.history);
 
   return (
     <div className="bg-surface flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-4 p-6 pb-4">
-        <h2 className="text-ink text-lg font-semibold">History</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-ink text-lg font-semibold">History</h2>
+          {/*
+            Hidden below `lg`, where the tab bar governs which pane is showing and
+            collapsing this one would strand the saved analyses.
+          */}
+          <button
+            type="button"
+            onClick={onHide}
+            aria-expanded
+            aria-label="Hide history"
+            title="Hide history"
+            className="text-ink-muted hover:text-ink hover:bg-accent-soft hidden rounded p-1 transition-colors lg:inline-flex"
+          >
+            <PanelLeftClose size={16} strokeWidth={1.5} aria-hidden />
+          </button>
+        </div>
         <NewAnalysisButton
           onClick={controller.newAnalysis}
           disabled={controller.state === "analyzing"}

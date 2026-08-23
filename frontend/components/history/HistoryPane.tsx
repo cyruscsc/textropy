@@ -94,7 +94,16 @@ export default function HistoryPane({
         )}
       </div>
 
-      <div className="border-border shrink-0 border-t p-3">
+      {/*
+        Both panes' footers are pinned to the bottom of the viewport, so a height
+        difference shows up as their top hairlines failing to line up. `min-h` keeps this
+        one level with `AnalysisFormPane`'s footer — change the value in both or neither.
+        `px-3` stays: with `ClearHistoryButton`'s own `px-3` it puts the label at a 24px
+        inset, level with the pane's `p-6` header and the day-group labels. (The entry
+        rows sit at 14px instead — `border-l-2 pl-3` — so they can carry a full-bleed
+        hover band; that is deliberate and not what this aligns to.)
+      */}
+      <div className="border-border flex min-h-[89px] shrink-0 items-center border-t px-3 py-6">
         <ClearHistoryButton
           onClear={controller.clearAllHistory}
           count={controller.history.length}

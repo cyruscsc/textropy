@@ -21,11 +21,14 @@ export default function FeatureCheckbox({
   return (
     <label
       className={cn(
-        "flex cursor-pointer items-center gap-2 py-1 text-sm",
+        // `items-start`, not `items-center`: in a narrow column a long label wraps to two
+        // lines, and the box belongs beside the first one.
+        "flex cursor-pointer items-start gap-2 py-1 text-sm",
         disabled && "cursor-not-allowed opacity-60",
       )}
     >
-      <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+      {/* 2px centres the 16px box on `text-sm`'s 20px line box. */}
+      <span className="relative mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
         <input
           type="checkbox"
           checked={checked}

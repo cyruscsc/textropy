@@ -24,7 +24,7 @@ export default function ModeToggle({
       role="radiogroup"
       aria-label="Analysis mode"
       className={cn(
-        "border-border inline-flex rounded border p-0.5",
+        "border-border flex w-full rounded border p-0.5",
         disabled && "opacity-60",
       )}
     >
@@ -37,7 +37,9 @@ export default function ModeToggle({
           disabled={disabled}
           onClick={() => onChange(id)}
           className={cn(
-            "rounded px-3 py-1.5 text-sm transition-colors",
+            // `flex-1` zeroes both flex bases, so the two halves stay equal even though
+            // "Single text" is the wider label.
+            "flex-1 rounded px-3 py-1.5 text-sm transition-colors",
             mode === id
               ? "bg-accent-soft text-accent font-medium"
               : "text-ink-muted hover:text-ink",

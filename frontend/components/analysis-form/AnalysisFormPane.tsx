@@ -96,7 +96,16 @@ export default function AnalysisFormPane({
         </section>
       </div>
 
-      <div className="border-border flex shrink-0 items-center justify-between gap-4 border-t p-6">
+      {/*
+        89px = 24px padding × 2 + a two-line `text-sm` hint (40px) + the 1px border, i.e.
+        the height this bar already reaches when the validation message wraps — which it
+        does between 1024px and ~1124px, where the space beside the button drops below the
+        ~274px the longest message needs. Flooring it there keeps the hairline still
+        instead of jumping 4px, and keeps it level with `HistoryPane`'s footer, which
+        carries the same value. `min-h` rather than `h` so a longer future message wraps
+        instead of clipping.
+      */}
+      <div className="border-border flex min-h-[89px] shrink-0 items-center justify-between gap-4 border-t p-6">
         {viewingHistory ? (
           <p className="text-ink-muted text-sm">
             Start a new analysis to edit these inputs.

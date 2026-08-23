@@ -38,7 +38,15 @@ function FeatureGroup({
       {label ? (
         <p className="text-ink-muted text-xs tracking-wide uppercase">{label}</p>
       ) : null}
-      <div className="flex flex-col gap-2">
+      {/*
+        Columns follow the *pane's* width, which is not a monotonic function of the
+        viewport's: at `lg` the pane is `w-2/5`, below it the pane is the full-width
+        Analyze tab, so a 1000px window gives a wider pane than an 1100px one. No
+        breakpoint variant can express that, so the column count comes from `auto-fill`
+        reading the real container width. 12rem is the largest minimum that still yields
+        two columns on a 1280 laptop.
+      */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-6 gap-y-1">
         {features.map((feature) => (
           <FeatureCheckbox
             key={feature.name}

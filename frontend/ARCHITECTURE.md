@@ -152,6 +152,25 @@ The single component that needs an exception is `FeatureCheckbox`, where the rea
 where focus styling is written by hand, and it is written by hand precisely *because* the element
 that receives focus is not the element that is seen.
 
+### The footer hairlines, and the one number written twice
+
+The History and Analysis panes each end in a `border-t` action bar pinned to the bottom of the
+viewport, so a height difference between them does not show up as one bar being taller — it shows
+up as their **top hairlines failing to line up** across the bottom of the app.
+
+Keeping them level takes more than matching padding, because the Analysis footer's height is not
+constant: its validation hint sits beside the Analyze button, and the three longest messages need
+~274px against roughly `0.4 × viewport − 176px` of available space. Between the `lg` floor (1024px)
+and ~1124px the hint therefore wraps to two lines and the bar grows by 4px. Both footers carry
+`min-h-[89px]` — 24px padding × 2, a 40px two-line `text-sm` block, and the 1px border — so the
+common one-line case is floored up to the height the wrapped case reaches naturally, and the
+hairline never moves.
+
+**This is the one magic number in the app that lives in two files** (`HistoryPane.tsx`,
+`AnalysisFormPane.tsx`); each comment names the other. `min-h` rather than `h` so a longer future
+message wraps rather than clips — that would break the alignment, but visibly and in the direction
+that preserves information.
+
 ### Typography — the one deliberate signature
 
 `layout.tsx:7-18` loads Inter and IBM Plex Mono through `next/font/google` as CSS variables,

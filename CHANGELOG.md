@@ -11,6 +11,47 @@ git tag `vX.Y.Z` marks the pair.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-24
+
+UI refinement across all three panes. The backend is unchanged from 0.2.0: no API contract
+moved, and no stored history entry is affected.
+
+### Added
+
+- Collapsible History pane. The pane header carries a hide control; collapsed, it leaves a
+  rail holding the two actions that still mean something with the list hidden — re-open and
+  "New analysis". The toggle and rail are 1024px-and-above only: below that History is one of
+  the three tabs, where hiding it would strand every saved analysis behind a control that is
+  itself hidden.
+- Adjustable divider between the Analysis and Results panes
+  (`frontend/components/shared/PaneDivider.tsx`), operable by pointer or arrow keys, with both
+  panes floored so neither can be dragged shut.
+- `frontend/lib/preferences.ts` — a second `localStorage` store alongside `lib/history.ts`,
+  following the same `useSyncExternalStore` contract, persisting both of the above under the
+  new **`textropy.preferences.v1`** key. It holds layout preferences only and stays out of the
+  analysis state machine. An absent or malformed value falls back to the defaults — History
+  expanded, Analysis pane at 40% — so a browser arriving from 0.2.0 opens exactly as it did
+  before, and clearing the key restores that layout.
+
+### Changed
+
+- The approximate marker is a bordered monospace chip
+  (`frontend/components/results/ApproximateBadge.tsx`) rather than a bare `≈` superscript. The
+  marked metric rows and the footnote that explains them render the same component, so the key
+  and the values it describes cannot drift apart visually.
+- The mode toggle spans the width of its pane in two equal halves, and feature lists lay out
+  in as many columns as the pane can hold. Column count follows the pane's width rather than
+  the viewport's — below 1024px the Analysis tab is full-width, so a narrower window can give
+  a wider pane, which no breakpoint can express.
+
+### Fixed
+
+- A feature checkbox now sits beside the first line of a label that wraps, instead of centring
+  itself against both lines.
+- The History and Analysis panes' footers no longer disagree in height between roughly 1024px
+  and 1124px, where the validation hint wraps to two lines and knocked the two hairlines out
+  of alignment.
+
 ## [0.2.0] — 2026-08-16
 
 Tier 1 grows from 5 features to 35, and parser-derived values now reach the reader marked as
@@ -169,6 +210,7 @@ and lost if browser storage is cleared, server-side input length capping is off 
 models are loaded per worker process, and the response carries no general per-feature
 `status`/`error` field. The frontend has no test suite yet.
 
-[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/cyruscsc/textropy/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cyruscsc/textropy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cyruscsc/textropy/releases/tag/v0.1.0

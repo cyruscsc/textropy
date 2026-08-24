@@ -49,10 +49,12 @@ Whatever URL you use must also be in the backend's `TEXTROPY_CORS_ORIGINS`.
 ## Shape
 
 ```
-app/          layout.tsx (fonts) · page.tsx (composes the 3 panes, owns the tab state)
+app/          layout.tsx (fonts) · page.tsx (composes the 3 panes, owns the tab
+              state and the persisted layout preferences)
               globals.css (design tokens — every colour lives here, §12.2)
 components/   history/ · analysis-form/ · results/ · shared/
-lib/          api.ts · history.ts · types.ts · useAnalysisState.ts · format.ts
+lib/          api.ts · history.ts · preferences.ts · types.ts ·
+              useAnalysisState.ts · format.ts
 ARCHITECTURE.md   code-level walkthrough of all three
 ```
 

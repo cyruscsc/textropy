@@ -167,11 +167,18 @@ export default function ResultsPane({
 
   return (
     <div className="bg-surface flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-4">
-        <h2 className="text-ink text-lg font-semibold">Results</h2>
-        {response && state !== "analyzing" ? (
-          <CopyResultsButton response={response} onError={controller.showToast} />
-        ) : null}
+      {/*
+        `min-h-9` on the title row, per the pane-header contract in `AnalysisFormPane`. It
+        matters most here: this is the one action that comes and goes, so without a floor
+        the "Results" title would drop a few pixels the moment a response arrived.
+      */}
+      <div className="shrink-0 p-6 pb-4">
+        <div className="flex min-h-9 items-center justify-between gap-4">
+          <h2 className="text-ink text-lg font-semibold">Results</h2>
+          {response && state !== "analyzing" ? (
+            <CopyResultsButton response={response} onError={controller.showToast} />
+          ) : null}
+        </div>
       </div>
       {/*
         Reserves the floating `PaneTabBar`'s footprint below `lg` so the last metric row

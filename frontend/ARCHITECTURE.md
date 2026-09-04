@@ -252,24 +252,37 @@ The single component that needs an exception is `FeatureCheckbox`, where the rea
 where focus styling is written by hand, and it is written by hand precisely *because* the element
 that receives focus is not the element that is seen.
 
-### The footer hairlines, and the one number written twice
+### The pane-header contract
 
-The History and Analysis panes each end in a `border-t` action bar pinned to the bottom of the
-viewport, so a height difference between them does not show up as one bar being taller — it shows
-up as their **top hairlines failing to line up** across the bottom of the app.
+All three panes are a padded header box wrapping a title row, and every one of those rows carries
+`min-h-9`:
 
-Keeping them level takes more than matching padding, because the Analysis footer's height is not
-constant: its validation hint sits beside the Analyze button, and the three longest messages need
-~274px against roughly `0.4 × viewport − 176px` of available space. Between the `lg` floor (1024px)
-and ~1124px the hint therefore wraps to two lines and the bar grows by 4px. Both footers carry
-`min-h-[89px]` — 24px padding × 2, a 40px two-line `text-sm` block, and the 1px border — so the
-common one-line case is floored up to the height the wrapped case reaches naturally, and the
-hairline never moves.
+```jsx
+<div className="shrink-0 p-6 pb-4">
+  <div className="flex min-h-9 items-center justify-between gap-4">
+    <h2 …>Results</h2>
+    {/* the pane's action, or nothing */}
+```
 
-**This is the one magic number in the app that lives in two files** (`HistoryPane.tsx`,
-`AnalysisFormPane.tsx`); each comment names the other. `min-h` rather than `h` so a longer future
-message wraps rather than clips — that would break the alignment, but visibly and in the direction
-that preserves information.
+The floor is what keeps the three `<h2>`s on a single baseline. A flex row is otherwise only as
+tall as its contents, and the contents differ per pane: History's actions are 24px icon buttons,
+Analysis and Results hold 34px labelled ones, and Results holds **nothing at all** until a response
+arrives. Without the minimum, a pane with a button renders its title several pixels below one
+without — and the Results title visibly drops the moment "Copy results" appears, which is the
+worst version of the bug because it moves while you watch.
+
+Two details are easy to get wrong. The minimum has to sit on the **inner** row: put it on the
+padded box and the 40px of vertical padding swallows it, since `min-height` is a border-box
+measure and the utility silently does nothing. And the two header buttons must agree in height —
+`CopyResultsButton` is a bordered ghost button while `AnalyzeButton` is filled, so `AnalyzeButton`
+carries `border border-transparent` to buy back the 1px per edge that would otherwise leave the
+two 2px apart in adjacent panes.
+
+`min-h-9` is 36px, chosen to clear the tallest action (34px) rather than to equal it. Nothing is
+load-bearing about the exact value: a pane drifting from it costs a pixel or two of alignment, not
+a layout. This deliberately replaced the old arrangement, where the two *footers* had to share a
+`min-h-[89px]` magic number written into two files, each comment naming the other — the footers
+are gone (see §10), and so is that coupling.
 
 ### Typography — the one deliberate signature
 
@@ -630,7 +643,7 @@ stub holding only the way back. The line for what belongs there is whether the a
 anything with the list hidden: resetting the form does, and so does the colour scheme, which is
 not about the list at all; "Clear all" and the per-entry actions are, so they are not. Note the
 test is about the *action*, not where it sits in the expanded pane — the theme toggle lives in the
-pane footer, beside the "Clear all" that fails the same test.
+History header, beside the "Clear all" that fails the same test.
 
 Three things keep this from becoming a second layout to maintain:
 

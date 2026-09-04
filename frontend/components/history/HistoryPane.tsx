@@ -44,7 +44,12 @@ export default function HistoryPane({
   return (
     <div className="bg-surface flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-4 p-6 pb-4">
-        <div className="flex items-center justify-between gap-2">
+        {/*
+          `min-h-9` per the pane-header contract in `AnalysisFormPane`: this row's actions
+          are 24px icon buttons rather than a 34px labelled one, so without a floor the
+          "History" title would sit several pixels above its two neighbours.
+        */}
+        <div className="flex min-h-9 items-center justify-between gap-2">
           <h2 className="text-ink text-lg font-semibold">History</h2>
           {/*
             The pane's actions, in the header rather than a footer strip: below `lg` the

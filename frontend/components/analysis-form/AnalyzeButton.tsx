@@ -29,8 +29,10 @@ export default function AnalyzeButton({
           // `px-3 py-1.5` matches `CopyResultsButton`, so the Analysis and Results
           // header actions share a baseline when the two panes sit side by side. It stays
           // filled rather than a ghost button: this is the primary CTA, not a header
-          // affordance.
-          "flex items-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-colors",
+          // affordance — but it still carries a transparent border, because
+          // `CopyResultsButton` has a real one and 1px on each edge is the difference
+          // between the two header buttons being the same height and being 2px apart.
+          "flex items-center gap-2 rounded border border-transparent px-3 py-1.5 text-sm font-medium transition-colors",
           disabled
             ? "bg-border text-ink-muted cursor-not-allowed"
             : "bg-accent text-on-accent hover:opacity-90",

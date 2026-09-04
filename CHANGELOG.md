@@ -11,6 +11,17 @@ git tag `vX.Y.Z` marks the pair.
 
 ## [Unreleased]
 
+### Fixed
+
+- The three pane titles sit on one baseline again. Each header is now a padded box wrapping a
+  title row with a shared 36px minimum, so a pane holding an action no longer renders its title
+  a few pixels below one that holds none — and the Results title no longer drops the moment its
+  "Copy results" button appears. 0.2.3 moved the actions into the headers and introduced the
+  discrepancy.
+- The Analysis and Results header buttons are the same height. "Copy results" is a bordered
+  ghost button and "Analyze" a filled one, and the 1px border on each edge was leaving the two
+  2px apart in adjacent panes.
+
 ## [0.2.3] — 2026-09-04
 
 Bottom navigation on small screens. Frontend only: the backend is unchanged from 0.2.2, no API

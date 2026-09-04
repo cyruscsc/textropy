@@ -39,15 +39,25 @@ export default function AnalysisFormPane({
         there is no footer to hold it, because the floating `PaneTabBar` covers the bottom
         of the pane below `lg`. A header slot is also the only placement that keeps the
         primary CTA reachable without scrolling past 35 feature checkboxes.
+
+        All three panes share one header shape: a padded box wrapping a `min-h-9` title
+        row. The minimum is what keeps the three `<h2>`s on one baseline — a row is
+        otherwise only as tall as its contents, so a pane holding a button sits a few pixels
+        lower than one holding none, and Results' title would shift the moment its "Copy
+        results" appeared. It has to sit on the inner row rather than this padded box, whose
+        40px of vertical padding would swallow it. Any value clearing the tallest action
+        (34px) works, so drifting from it costs a pixel of alignment, not a layout.
       */}
-      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-4">
-        <h2 className="text-ink text-lg font-semibold">Analysis</h2>
-        <AnalyzeButton
-          onClick={controller.runAnalysis}
-          disabled={!validation.canAnalyze}
-          analyzing={state === "analyzing"}
-          title={validation.reason}
-        />
+      <div className="shrink-0 p-6 pb-4">
+        <div className="flex min-h-9 items-center justify-between gap-4">
+          <h2 className="text-ink text-lg font-semibold">Analysis</h2>
+          <AnalyzeButton
+            onClick={controller.runAnalysis}
+            disabled={!validation.canAnalyze}
+            analyzing={state === "analyzing"}
+            title={validation.reason}
+          />
+        </div>
       </div>
 
       {/*

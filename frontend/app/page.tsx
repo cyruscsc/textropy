@@ -19,6 +19,7 @@ import AnalysisFormPane from "@/components/analysis-form/AnalysisFormPane";
 import HistoryPane from "@/components/history/HistoryPane";
 import ResultsPane from "@/components/results/ResultsPane";
 import PaneDivider from "@/components/shared/PaneDivider";
+import ThemeToggle from "@/components/shared/ThemeToggle";
 import Toast from "@/components/shared/Toast";
 import { cn } from "@/lib/format";
 import {
@@ -113,10 +114,11 @@ export default function Page() {
       >
         {/*
           The collapsed pane's stand-in: the History header compressed to its two icons, in
-          the same order and with the same `gap-4` between them. "New analysis" earns its
-          place because it is the one header action that still means something with the
-          list hidden — everything else there is *about* the list. `lg`-only, like the
-          toggle, so the tabbed layout keeps its full-width button instead.
+          the same order and with the same `gap-4` between them, plus the footer's theme
+          toggle. The test is whether an action still means something with the list hidden:
+          "New analysis" and the theme do, "Clear all" and the per-entry actions do not.
+          `lg`-only, like the collapse control, so the tabbed layout keeps its full-width
+          button instead.
         */}
         <div
           className={cn(
@@ -151,6 +153,8 @@ export default function Page() {
           >
             <Plus size={16} strokeWidth={1.5} aria-hidden />
           </button>
+
+          <ThemeToggle />
         </div>
 
         {/*

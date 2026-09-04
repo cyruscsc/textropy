@@ -45,7 +45,7 @@ export default function FeatureCheckbox({
           )}
         >
           {checked ? (
-            <Check size={12} strokeWidth={2} className="text-surface" />
+            <Check size={12} strokeWidth={2} className="text-on-accent" />
           ) : null}
         </span>
       </span>

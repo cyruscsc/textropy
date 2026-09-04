@@ -11,6 +11,7 @@ import { Fragment } from "react";
 import ClearHistoryButton from "@/components/history/ClearHistoryButton";
 import HistoryListItem from "@/components/history/HistoryListItem";
 import NewAnalysisButton from "@/components/history/NewAnalysisButton";
+import ThemeToggle from "@/components/shared/ThemeToggle";
 import { dayLabel } from "@/lib/format";
 import type { AnalysisController } from "@/lib/useAnalysisState";
 import type { HistoryEntry } from "@/lib/types";
@@ -103,11 +104,23 @@ export default function HistoryPane({
         rows sit at 14px instead — `border-l-2 pl-3` — so they can carry a full-bleed
         hover band; that is deliberate and not what this aligns to.)
       */}
-      <div className="border-border flex min-h-[89px] shrink-0 items-center border-t px-3 py-6">
-        <ClearHistoryButton
-          onClear={controller.clearAllHistory}
-          count={controller.history.length}
-        />
+      <div className="border-border flex min-h-[89px] shrink-0 items-center justify-between gap-2 border-t px-3 py-6">
+        {/*
+          `ClearHistoryButton` is `w-full`, so it needs a flex parent of its own to keep
+          its full-bleed hover band and left-aligned label beside a sibling.
+        */}
+        <div className="min-w-0 flex-1">
+          <ClearHistoryButton
+            onClear={controller.clearAllHistory}
+            count={controller.history.length}
+          />
+        </div>
+        {/*
+          The app has no header at any breakpoint (§9), so this footer is its only
+          persistent chrome — and the one strip that is present in both arrangements, since
+          below `lg` History is a tab rather than a column.
+        */}
+        <ThemeToggle />
       </div>
     </div>
   );

@@ -49,11 +49,12 @@ Whatever URL you use must also be in the backend's `TEXTROPY_CORS_ORIGINS`.
 ## Shape
 
 ```
-app/          layout.tsx (fonts) · page.tsx (composes the 3 panes, owns the tab
-              state and the persisted layout preferences)
-              globals.css (design tokens — every colour lives here, §12.2)
+app/          layout.tsx (fonts, pre-paint theme script) · page.tsx (composes the
+              3 panes, owns the tab state and the persisted presentation preferences)
+              globals.css (design tokens — every colour lives here: the light
+              palette from §12.2, and the dark one that re-points the same names)
 components/   history/ · analysis-form/ · results/ · shared/
-lib/          api.ts · history.ts · preferences.ts · types.ts ·
+lib/          api.ts · history.ts · preferences.ts · theme.ts · types.ts ·
               useAnalysisState.ts · format.ts
 ARCHITECTURE.md   code-level walkthrough of all three
 ```
@@ -70,6 +71,10 @@ Three things worth knowing before editing:
   a row and an object into a nested group, so `{label, score}` and `{a_given_b, b_given_a}`
   both display without special-casing. A feature reporting `{"available": false}` degrades
   to an "Unavailable" row instead of failing the pane (§13.4).
+- **No component names a colour.** Light and dark are the same nine tokens pointed at two
+  palettes, so a hardcoded hex is invisible until someone switches theme. The choice
+  (system/light/dark) is a `localStorage` preference beside the pane-layout ones, applied
+  by an inline script before first paint.
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) covers all three in detail, along with the design-token
 system and the invariants a new component has to respect.

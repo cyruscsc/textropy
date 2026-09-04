@@ -7,8 +7,15 @@
  * §9 is literally what the pane dividers use. `@theme inline` re-exports them into
  * Tailwind's colour namespace, giving `bg-surface` / `text-ink-muted` / `border-border`
  * without duplicating a hex anywhere.
+ *
+ * `:root` is the light palette — spec §12.2 verbatim. The dark palette below overrides the
+ * same names under `[data-theme="dark"]`, which is the only reason a second theme costs no
+ * component changes: no component names a colour, so re-pointing the variables re-themes
+ * all of them. A new colour needs a value in *both* blocks.
  */
 :root {
+  color-scheme: light;
+
   --bg: #fafaf9;
   --surface: #ffffff;
   --border: #e4e1dc;
@@ -18,6 +25,57 @@
   --accent-soft: #e8eef2;
   --positive: #3f7857;
   --negative: #a14c43;
+
+  /*
+   * Text and icons on a filled `--accent` surface. Not `--surface`, though they share a
+   * value here: in dark mode the accent is the *light* colour and its label has to go
+   * dark, so "the pane background" and "the thing that reads on accent" are two different
+   * questions that only look like one under a light palette.
+   */
+  --on-accent: #ffffff;
+
+  /*
+   * Diff tints, mirroring `--accent-soft`. `bg-positive/10` would also be token-derived,
+   * but an alpha fraction is chosen against a specific ground — 10% over white and 10%
+   * over near-black are not the same design.
+   */
+  --positive-soft: #ecf2ee;
+  --negative-soft: #f6eae9;
+
+  /* Elevation is a shadow *colour* problem across themes, not a shadow geometry one. */
+  --shadow-color: rgb(28 27 26 / 0.1);
+}
+
+/**
+ * Warm charcoal — the light palette's stone/paper character after dark, rather than a
+ * switch to a cooler neutral family.
+ *
+ * Defined exactly once. `system` is resolved to `light`/`dark` in JS (`lib/theme.ts`)
+ * before first paint, so there is no `@media (prefers-color-scheme: dark)` copy of these
+ * values to drift out of sync with this one. The cost is that a visitor with JS disabled
+ * gets the light palette — irrelevant for an app whose every result comes from a
+ * client-side `fetch`.
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #161514;
+  --surface: #1e1d1b;
+  --border: #322f2b;
+  --ink: #edeae4;
+  --ink-muted: #9a958c;
+  --accent: #8fb4ce;
+  --accent-soft: #24313b;
+  --positive: #6fa98a;
+  --negative: #d08a80;
+
+  --on-accent: #12181c;
+
+  --positive-soft: #1e2b24;
+  --negative-soft: #30201e;
+
+  /* Black at 10% is invisible on a near-black ground; the border does the rest. */
+  --shadow-color: rgb(0 0 0 / 0.55);
 }
 
 @theme inline {
@@ -28,8 +86,20 @@
   --color-ink-muted: var(--ink-muted);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
   --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
   --color-negative: var(--negative);
+  --color-negative-soft: var(--negative-soft);
+
+  /*
+   * Tailwind's defaults hardcode `rgb(0 0 0 / 0.1)`. Routing them through a token keeps
+   * `shadow-sm` / `shadow-md` (§12.4's dropdown and toast/modal elevations) theme-aware
+   * without any component opting in — `@theme inline` leaves the `var()` unresolved until
+   * the utility is used, so it reads whichever palette is active.
+   */
+  --shadow-sm: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
+  --shadow-md: 0 4px 12px -2px var(--shadow-color), 0 2px 4px -2px var(--shadow-color);
 
   /* Sans UI face, mono for every metric — the one deliberate signature (§12.1). */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

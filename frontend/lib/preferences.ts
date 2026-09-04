@@ -7,13 +7,30 @@
  * keeps the server render and the hydrating client render in agreement, and makes a
  * change in one browser tab reach the others.
  *
- * These are *layout* preferences, not analysis state — they deliberately stay out of
- * `AnalysisController` (see ARCHITECTURE.md §13). Reads are defensive: the store is
+ * These are presentation preferences — pane layout and colour scheme — not analysis state,
+ * so they deliberately stay out of `AnalysisController` (see ARCHITECTURE.md §13). Reads are defensive: the store is
  * user-writable and survives across deploys, so malformed JSON degrades to the defaults
  * rather than crashing the layout.
  */
 
-const STORAGE_KEY = "textropy.preferences.v1";
+/**
+ * Exported so `lib/theme.ts` can build the pre-paint init script from the same string the
+ * store reads. Two copies of a storage key is exactly the kind of drift that fails
+ * silently — the theme would simply never restore.
+ */
+export const PREFERENCES_STORAGE_KEY = "textropy.preferences.v1";
+
+/**
+ * `system` follows the OS; the other two pin it. Resolution to an actual palette happens
+ * in `lib/theme.ts` — this module only stores the choice.
+ */
+export type Theme = "system" | "light" | "dark";
+
+const THEMES: readonly Theme[] = ["system", "light", "dark"];
+
+function isTheme(value: unknown): value is Theme {
+  return typeof value === "string" && (THEMES as readonly string[]).includes(value);
+}
 
 interface Preferences {
   /** Whether the History pane is expanded at `lg` and above. */
@@ -24,9 +41,15 @@ interface Preferences {
    * before it became adjustable, so a first load looks unchanged.
    */
   analysisPanePercent: number;
+  /** Colour scheme. Unlike the two above, this one governs the whole document. */
+  theme: Theme;
 }
 
-const DEFAULTS: Preferences = { historyVisible: true, analysisPanePercent: 40 };
+const DEFAULTS: Preferences = {
+  historyVisible: true,
+  analysisPanePercent: 40,
+  theme: "system",
+};
 
 /**
  * Bounds for the stored percentage. The pixel minimums that stop either pane collapsing
@@ -56,7 +79,7 @@ function readFromStorage(): Preferences {
   const store = storage();
   if (!store) return DEFAULTS;
   try {
-    const raw = store.getItem(STORAGE_KEY);
+    const raw = store.getItem(PREFERENCES_STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return DEFAULTS;
@@ -71,6 +94,9 @@ function readFromStorage(): Preferences {
         Number.isFinite(value.analysisPanePercent)
           ? clampAnalysisPercent(value.analysisPanePercent)
           : DEFAULTS.analysisPanePercent,
+      // Absent in blobs written before the theme existed, so it falls through to the
+      // default — which is why the storage key did not need a version bump.
+      theme: isTheme(value.theme) ? value.theme : DEFAULTS.theme,
     };
   } catch {
     return DEFAULTS;
@@ -90,7 +116,7 @@ function emit(): void {
 }
 
 function onStorageEvent(event: StorageEvent): void {
-  if (event.key !== null && event.key !== STORAGE_KEY) return;
+  if (event.key !== null && event.key !== PREFERENCES_STORAGE_KEY) return;
   cache = null;
   emit();
 }
@@ -131,7 +157,7 @@ function write(next: Preferences): void {
   // A preference that cannot be persisted is not worth surfacing to the user — the
   // setting still works for this session, it just will not survive a reload.
   try {
-    store?.setItem(STORAGE_KEY, JSON.stringify(next));
+    store?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
   } catch {
     /* quota or blocked storage; the in-memory cache still holds the change */
   }
@@ -172,5 +198,26 @@ export function setAnalysisPanePercent(percent: number): void {
     writeTimer = null;
     write(next);
   }, 150);
+  emit();
+}
+
+export function getThemeSnapshot(): Theme {
+  return snapshot().theme;
+}
+
+/**
+ * See `getHistoryVisibleServerSnapshot`. The *page* does not flash: `lib/theme.ts`'s init
+ * script sets `data-theme` while the HTML is still parsing. What this default costs is one
+ * frame of the toggle showing the system icon before the stored choice arrives.
+ */
+export function getThemeServerSnapshot(): Theme {
+  return DEFAULTS.theme;
+}
+
+/** Written immediately, like `setHistoryVisible` — there is no key-repeat path here. */
+export function setTheme(theme: Theme): void {
+  const next: Preferences = { ...snapshot(), theme };
+  cache = next;
+  write(next);
   emit();
 }

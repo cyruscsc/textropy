@@ -29,7 +29,7 @@ export default function AnalyzeButton({
           "flex items-center gap-2 rounded px-4 py-2 text-sm font-medium transition-colors",
           disabled
             ? "bg-border text-ink-muted cursor-not-allowed"
-            : "bg-accent text-surface hover:opacity-90",
+            : "bg-accent text-on-accent hover:opacity-90",
         )}
       >
         {analyzing ? (

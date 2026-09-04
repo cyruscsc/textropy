@@ -108,7 +108,7 @@ Three rules give the layering its teeth:
 
 ### Two layers of tokens, for two consumers
 
-`globals.css:11-21` declares the nine colours from spec §12.2 under **the spec's own names**:
+`:root` declares the nine colours from spec §12.2 under **the spec's own names**:
 
 ```css
 :root {
@@ -119,13 +119,113 @@ Three rules give the layering its teeth:
 }
 ```
 
-`@theme inline` (`globals.css:23-47`) then re-exports each as `--color-*`, which is what makes
-Tailwind v4 generate `bg-surface`, `text-ink-muted`, `border-border`, `text-negative` as real
-utility classes. There is no `tailwind.config.js`; in Tailwind v4 this file *is* the config.
+`@theme inline` then re-exports each as `--color-*`, which is what makes Tailwind v4 generate
+`bg-surface`, `text-ink-muted`, `border-border`, `text-negative` as real utility classes. There is
+no `tailwind.config.js`; in Tailwind v4 this file *is* the config.
 
 The two layers exist because they have different readers. Raw `var(--border)` is what the spec's
 prose uses — "panes divided by `1px solid var(--border)`" is literally the code. `--color-*` is
 what components use, which is why **no hex appears in any component**.
+
+### The second palette, and the three tokens it forced
+
+`:root[data-theme="dark"]` re-points the same nine names at a warm charcoal palette. That is the
+entire dark theme as far as the components are concerned: because no component names a colour,
+re-pointing the variables re-themes all twenty-two of them without a single class changing. The
+"no hex in a component" rule is not tidiness — it is what made a second theme a CSS-only change.
+
+Three values did *not* survive the switch, and each became a token:
+
+| Was | Now | Why |
+|---|---|---|
+| `text-surface` on `bg-accent` | `--on-accent` | They share `#ffffff` in light, but in dark the accent *is* the light colour and its label has to go dark. "The pane background" and "what reads on accent" were two questions wearing one answer. |
+| `bg-positive/10`, `bg-negative/10` | `--positive-soft`, `--negative-soft` | Token-derived, but an alpha fraction is chosen against a specific ground; 10% over white and 10% over near-black are not the same design. Mirrors `--accent-soft`, which already existed for exactly this. |
+| Tailwind's `rgb(0 0 0 / 0.1)` shadows | `--shadow-color` | §12.4 reserves `shadow-sm`/`shadow-md` for dropdowns and toasts. Black at 10% is invisible on a near-black ground. `@theme inline` leaves the `var()` unresolved until the utility is used, so both shadows became theme-aware with no component opting in. |
+
+`color-scheme` is set in both blocks. Without it the native scrollbars on four `overflow-y-auto`
+regions, the textarea caret, and the `resize: vertical` handle all stay light on a dark page.
+
+### Why the dark palette is written once, and what that costs
+
+The preference has three values — `system`, `light`, `dark` — but CSS only ever sees two. The
+inline script in `app/layout.tsx` resolves `system` through `matchMedia` and writes the *answer*
+to `<html data-theme>`, so `globals.css` needs one dark block rather than the usual two (a
+`@media (prefers-color-scheme: dark)` copy for system, plus an attribute copy for the explicit
+choice). Two copies of nine values that must agree is precisely the drift §15 lists as caught by
+nothing.
+
+The cost is that a visitor with JavaScript disabled gets the light palette regardless of their OS.
+For an app whose every result arrives through a client-side `fetch` — and which renders no
+analysis at all without JS — that is not a reader who exists.
+
+### The pre-paint script, and why it needs a component of its own
+
+The script is the one place the store's logic is deliberately duplicated. Nothing in React can do
+this job, because every React mechanism runs downstream of the browser's first paint:
+
+| Mechanism | Runs | Too late because |
+|---|---|---|
+| `useEffect` | after hydration, after paint | the reader sees light, then dark |
+| `useLayoutEffect` | after hydration, before paint | hydration is itself after the server HTML painted |
+| `useSyncExternalStore` | at hydration | same |
+
+Hydration is one of the *last* things that happens to a page, not the first: the browser parses the
+HTML, builds the DOM and paints, and only then does React's bundle finish loading. That gap is
+where the flash lives, and on a throttled connection it is hundreds of milliseconds. A classic
+`<script>` in `<head>` is the only thing that runs *during parsing* — before `<body>` exists, and
+therefore before anything can paint. What the script does **not** duplicate is the storage key
+(imported from `preferences.ts`) or the palette; those are the two things whose drift would fail
+silently.
+
+#### The three renders, and the one that has to disagree
+
+Writing `<script dangerouslySetInnerHTML>` directly in the layout does not work, and it fails in a
+way that hides its own cause. React 19 warns whenever a component renders a script tag — correct in
+general, since a script inserted by a DOM update never executes. That warning arrived alongside a
+second one that was simply false: a hydration mismatch on `ClearHistoryButton`'s `disabled`, at a
+node whose server HTML was verifiably correct.
+
+The mechanism is in Next's `preventing-flash-before-hydration` guide. An unsuppressed mismatch is
+not a local complaint: React abandons hydration for the nearest boundary and re-renders it
+client-side, which (a) reports diffs at nodes that were never wrong, and (b) **discards DOM
+mutations React did not make** — including the `data-theme` the script had just set. The naive
+version defeats itself.
+
+`components/shared/InlineScript.tsx` resolves it by making the element render *differently* in the
+two places it is rendered:
+
+| Render | `typeof window` | Emits | Effect |
+|---|---|---|---|
+| Server → HTML | `"undefined"` | `type="text/javascript"` | the parser executes it in `<head>`, before first paint |
+| Client → hydration | `"object"` | `type="text/plain"` | React sees an inert tag, so the script-tag warning never fires |
+
+`suppressHydrationWarning` on the tag then covers the only diff left, `type` itself — the DOM wins,
+which is the right outcome, since the DOM holds a script that has already run. Note the
+`text/plain` is not a trick to quiet a warning: a script React inserted via a DOM update genuinely
+would not execute, so on the client the tag really *is* inert and says so. `<html>` carries its own
+`suppressHydrationWarning` for the same class of reason — `data-theme` is a DOM write React did not
+make, and without it React discards the correction rather than keeping it.
+
+**It has to be a Client Component.** A Server Component's body runs only on the server; its output
+is serialised into the RSC payload and the browser never re-executes it, so `typeof window` would
+be baked as `undefined` and the client would still see an executable script. The whole approach
+depends on the component being re-run in the browser and answering differently — precisely the
+thing Server Components exist to avoid. `app/layout.tsx` stays a Server Component and renders this
+one Client Component to hold the asymmetry.
+
+#### What was rejected
+
+- **A cookie read with `cookies()`,** which would let the server render the right `data-theme` and
+  need no script at all. It opts the entire app out of static prerendering — `/` builds as
+  `○ (Static)` today — making every request dynamic to serve a preference that changes twice in a
+  reader's life.
+- **`next/script` with `strategy="beforeInteractive"`,** the sanctioned path for third-party
+  scripts. More machinery than one line of vanilla JS needs, and the guide's own theming recipe
+  uses the raw tag.
+
+**One deployment caveat:** an inline script is blocked by any CSP without `'unsafe-inline'`. There
+is no policy in this repo, but `DEPLOYMENT.md` puts nginx in front on the VPS — adding one there
+needs a nonce, or the theme silently stops restoring and every reader gets light.
 
 ### Three constraints enforced structurally rather than by discipline
 
@@ -142,7 +242,7 @@ This is the part most worth understanding before editing:
   for 4px everywhere; this makes "everywhere" unfalsifiable rather than a review checklist item.
 - **Bare `transition-colors` already lands in §12.4's 120–150ms ease-out band.** The correct
   duration is the *default*, so getting it right requires no knowledge.
-- **Focus rings are one global rule** (`globals.css:58-61`), not a class each element opts into.
+- **Focus rings are one global rule** (the `:focus-visible` block), not a class each element opts into.
   §12.5 calls visible 2px `--accent` focus outlines non-negotiable; a per-component approach makes
   that a thing 19 components must each remember.
 
@@ -173,8 +273,8 @@ that preserves information.
 
 ### Typography — the one deliberate signature
 
-`layout.tsx:7-18` loads Inter and IBM Plex Mono through `next/font/google` as CSS variables,
-wired into `--font-sans` / `--font-mono` in the `@theme` block and applied at `layout.tsx:33`.
+`layout.tsx` loads Inter and IBM Plex Mono through `next/font/google` as CSS variables, wired
+into `--font-sans` / `--font-mono` in the `@theme` block and applied on `<html>`.
 
 Spec §12.1 asks for one signature and one only: **every numeric value renders in monospace against
 a sans UI face.** It appears in exactly four places:
@@ -359,8 +459,8 @@ both renders agree; `subscribe` attaches a `window "storage"` listener on the fi
 compares snapshots by reference; re-parsing JSON on every call returns a fresh array each time and
 loops forever. The cache is invalidated on write and on storage event, and nowhere else.
 
-`lib/preferences.ts` is a second store under the same contract, holding UI preferences rather than
-analysis data (today just whether the History pane is collapsed — §10, §13). It repeats the shape
+`lib/preferences.ts` is a second store under the same contract, holding presentation preferences
+rather than analysis data — pane layout and colour scheme (§3, §10, §13). It repeats the shape
 rather than importing it, because `history.ts` is hard-wired to `HistoryEntry[]` and its `storage()`
 guard is module-private; there was nothing to reuse without generalising a module whose defensive
 reads and quota handling are specific to what it stores. Its snapshots return **primitives**, so
@@ -485,10 +585,12 @@ evolves.
 ### Collapsing History is a third arrangement, not a fourth tree
 
 The History pane can be collapsed to a ~40px rail (`page.tsx`, `HistoryPane.tsx`). The rail is the
-pane header compressed to its two icons in the same order — re-open, then "new analysis" — rather
-than a stub holding only the way back. The line for what belongs there is whether the action still
-means anything with the list hidden: resetting the form does, so it is on the rail; "Clear all" and
-the per-entry actions are *about* the list, so they are not.
+pane compressed to three icons in reading order — re-open, "new analysis", theme — rather than a
+stub holding only the way back. The line for what belongs there is whether the action still means
+anything with the list hidden: resetting the form does, and so does the colour scheme, which is
+not about the list at all; "Clear all" and the per-entry actions are, so they are not. Note the
+test is about the *action*, not where it sits in the expanded pane — the theme toggle lives in the
+pane footer, beside the "Clear all" that fails the same test.
 
 Three things keep this from becoming a second layout to maintain:
 
@@ -690,8 +792,9 @@ Seven pieces of state are intentionally *not* in the controller:
 | Active tab | `page.tsx:34` | Layout, not analysis state |
 | Whether History is collapsed | `page.tsx` | Same — and no pane but History reads it |
 | Analysis/Results divider position | `page.tsx` | Same — a pane width, not an analysis input |
+| Colour scheme | `ThemeToggle.tsx` | Presentation, and its real consumer is `<html>`, not a pane |
 
-The last two are the only ones that are *persisted* (`lib/preferences.ts`, §7). Persistence and
+The last three are the only ones that are *persisted* (`lib/preferences.ts`, §7). Persistence and
 ownership are separate questions: it survives a reload because a reader who collapsed the pane
 should not have to collapse it again, but no part of an analysis depends on it, so putting it in
 `AnalysisController` would widen that interface for nothing. Reading it through
@@ -786,7 +889,7 @@ useAnalysisState mount
 | `getSnapshot` returns a referentially stable value | The `cache` at `history.ts:73` | Infinite render loop |
 | No `setState` synchronously in an effect body | `catalogAttempt` retry key pattern | React 19 lint error; cascading renders |
 | No ref reads during render | `setMode` depends on `textB` instead of a ref | React 19 lint error; stale closure bugs |
-| Colours and radii come from tokens | `@theme inline` + a flat radius scale | Design drift that no test catches |
+| Colours and radii come from tokens | `@theme inline` + a flat radius scale | Design drift that no test catches — and, since the dark palette rides on the same names, a component that hardcodes a colour is invisible until someone switches theme |
 | A per-feature `available: false` degrades one row | `isUnavailable` branch in `MetricRow` | One optional model takes down the whole results pane |
 
 The first two are the ones to guard hardest, because they are the only ones nothing mechanical
@@ -816,8 +919,10 @@ storing it if it is a function of existing state; see §5 for why.
 
 **A new pane-local UI affordance** — keep the state in the component. See §13 for the line.
 
-**A new colour or spacing value** — add a token in `globals.css:11-21` and alias it in the
-`@theme inline` block. Never a literal in a component.
+**A new colour or spacing value** — add a token to `:root` in `globals.css` and alias it once in
+the `@theme inline` block. Never a literal in a component. A *colour* needs a value in the dark
+block too: ask what it means rather than what it looks like, since `--on-accent` exists only
+because `text-surface` answered the wrong question when the palette flipped (§3).
 
 **A new response shape from the backend** — check whether `MetricRow`'s three branches already
 cover it. Scalars and nested objects are handled; arrays currently are not (they would hit

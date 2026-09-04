@@ -115,8 +115,8 @@ export default function ComparisonDiffView({
                 <span
                   key={index}
                   className={cn(
-                    op.type === "delete" && "bg-negative/10 text-negative line-through",
-                    op.type === "insert" && "bg-positive/10 text-positive",
+                    op.type === "delete" && "bg-negative-soft text-negative line-through",
+                    op.type === "insert" && "bg-positive-soft text-positive",
                   )}
                 >
                   {op.tokens.join(" ")}{" "}

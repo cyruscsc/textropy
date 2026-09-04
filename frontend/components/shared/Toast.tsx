@@ -23,11 +23,17 @@ export default function Toast({
   if (!message) return null;
 
   return (
-    // `shadow-md` is reserved for toasts and modals (§12.4).
+    /*
+      `shadow-md` is reserved for toasts and modals (§12.4).
+
+      Below `lg` the bottom of the screen belongs to `PaneTabBar`, so the toast has to
+      clear it — `bottom-28` is that menu's height plus its gutter, rounded up. At `lg`
+      the menu is gone and the toast returns to §12's 24px offset.
+    */
     <div
       role="status"
       aria-live="polite"
-      className="border-border bg-surface fixed bottom-6 left-1/2 z-50 flex max-w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded border px-4 py-3 shadow-md"
+      className="border-border bg-surface fixed bottom-28 left-1/2 z-50 flex max-w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded border px-4 py-3 shadow-md lg:bottom-6"
     >
       <p className="text-ink text-sm">{message}</p>
       <button

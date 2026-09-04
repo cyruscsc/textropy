@@ -9,7 +9,8 @@
  * which is the property §11 is protecting.
  *
  * The same three pane components serve both arrangements — three columns at ≥1024px, one
- * column behind tabs below it (§9). There is no separate mobile tree to keep in sync.
+ * column behind the bottom-anchored `PaneTabBar` below it (§9). There is no separate mobile
+ * tree to keep in sync.
  */
 
 import { PanelLeftOpen, Plus } from "lucide-react";
@@ -19,6 +20,7 @@ import AnalysisFormPane from "@/components/analysis-form/AnalysisFormPane";
 import HistoryPane from "@/components/history/HistoryPane";
 import ResultsPane from "@/components/results/ResultsPane";
 import PaneDivider from "@/components/shared/PaneDivider";
+import PaneTabBar, { type Tab } from "@/components/shared/PaneTabBar";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import Toast from "@/components/shared/Toast";
 import { cn } from "@/lib/format";
@@ -32,16 +34,13 @@ import {
 } from "@/lib/preferences";
 import { useAnalysisState } from "@/lib/useAnalysisState";
 
-type Tab = "history" | "analyze" | "results";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "history", label: "History" },
-  { id: "analyze", label: "Analyze" },
-  { id: "results", label: "Results" },
-];
-
 export default function Page() {
   const controller = useAnalysisState();
+  /**
+   * Deliberately not persisted, unlike the layout preferences below: the app opens on
+   * Analyze every time, which is also why it is the centre item in `PaneTabBar` — the
+   * shortest thumb travel from where navigation starts.
+   */
   const [tab, setTab] = useState<Tab>("analyze");
 
   /**
@@ -70,31 +69,6 @@ export default function Page() {
 
   return (
     <div className="bg-bg flex h-full flex-col">
-      <nav
-        aria-label="Panes"
-        className="border-border flex shrink-0 border-b lg:hidden"
-        role="tablist"
-      >
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            aria-controls={`pane-${id}`}
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex-1 px-4 py-3 text-sm transition-colors",
-              tab === id
-                ? "bg-accent-soft text-accent font-medium"
-                : "text-ink-muted hover:text-ink",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
       {/*
         Pane widths live in CSS variables on the row so the divider can drag one by
         touching a single property, and so `--history-w` has exactly one definition to
@@ -213,6 +187,8 @@ export default function Page() {
           <ResultsPane controller={controller} />
         </section>
       </div>
+
+      <PaneTabBar tab={tab} onSelect={setTab} />
 
       <Toast message={controller.toast} onDismiss={controller.dismissToast} />
     </div>

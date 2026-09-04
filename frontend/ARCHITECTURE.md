@@ -567,7 +567,7 @@ actions invisible — and effectively unreachable — for anyone navigating by k
 
 Spec §9 requires three panes at ≥1024px and a single column behind **History / Analyze / Results**
 tabs below it, and explicitly flags cutting the responsive fallback as a known risk. It is
-therefore built from the same component tree rather than a second one (`page.tsx:37`):
+therefore built from the same component tree rather than a second one (`page.tsx`):
 
 ```ts
 const paneVisibility = (id: Tab) => (tab === id ? "flex" : "hidden lg:flex");
@@ -577,6 +577,24 @@ Below `lg`, the tab bar renders and only the active pane is displayed. At `lg` a
 bar is `lg:hidden` and all three panes are unconditionally `flex`. Sizing (`lg:w-[280px]`,
 `lg:w-2/5`, `flex-1`) and the hairline `lg:border-r` dividers live on the same three `<section>`
 elements that serve the mobile layout.
+
+That tab bar is `components/shared/PaneTabBar.tsx`, and it is anchored to the **bottom** of the
+viewport: on a phone it is the app's primary navigation, and the top edge is the hardest place on
+the screen for a thumb to reach. Analyze is the centre item and the state's initial value, so the
+pane the app opens on is also the one under the thumb. It carries the two design-system exceptions
+in the app — `rounded-full` against §12.4's 4px-everywhere radius, and `shadow-md`, which
+`globals.css` otherwise reserves for toasts and modals — because a floating menu is what both rules
+would have described had §12 anticipated one.
+
+**It is in normal flow, not `position: fixed`.** `AnalysisFormPane` and `HistoryPane` both end in an
+89px bordered footer holding the Analyze button and Clear-all, so an overlaying menu would have to be
+paid for with a matching bottom padding threaded through every pane's scroll container *and* both
+footers — three values to keep in sync with the menu's height, plus iOS Safari's habit of displacing
+fixed elements when the soft keyboard opens over the two textareas. The gutter that makes it read as
+floating is the nav's own padding (12px, plus `env(safe-area-inset-bottom)`). The one thing this
+gives up is content scrolling under a translucent bar, which the flat hairline aesthetic does not
+want. `Toast` is the only element that has to know the menu exists: it is `fixed bottom-28` below
+`lg` and returns to §12's `bottom-6` at `lg`, where the menu is gone.
 
 There is no mobile component tree to keep in sync, which is the entire point: the failure mode for
 a responsive fallback built as a parallel tree is that it silently rots as the desktop layout
@@ -789,7 +807,7 @@ Seven pieces of state are intentionally *not* in the controller:
 | Whether a results section is open | `TierResultSection.tsx:21` | Same |
 | Whether the diff is shown | `ComparisonDiffView.tsx:79` | Same, and it gates an expensive computation |
 | Copy-confirmation flash | `CopyResultsButton.tsx:17` | Transient, 2s, nobody else cares |
-| Active tab | `page.tsx:34` | Layout, not analysis state |
+| Active tab | `page.tsx` | Layout, not analysis state — and deliberately unpersisted, so the app always opens on Analyze |
 | Whether History is collapsed | `page.tsx` | Same — and no pane but History reads it |
 | Analysis/Results divider position | `page.tsx` | Same — a pane width, not an analysis input |
 | Colour scheme | `ThemeToggle.tsx` | Presentation, and its real consumer is `<html>`, not a pane |

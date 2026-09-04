@@ -11,6 +11,39 @@ git tag `vX.Y.Z` marks the pair.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-09-04
+
+Dark mode, and a system/light/dark preference to choose it. Frontend only: the backend is
+unchanged from 0.2.1, no API contract moved, and no stored history entry is affected.
+
+### Added
+
+- Dark mode. `:root[data-theme="dark"]` re-points the nine design tokens at a warm charcoal
+  palette; because no component names a colour, that one block is the whole theme and not a
+  single component's classes changed. `color-scheme` is set alongside it, so native
+  scrollbars, the textarea caret and its resize handle follow the page instead of staying
+  light.
+- A theme control cycling **system → light → dark**, in the History pane footer and mirrored
+  on the collapsed rail — an action belongs on the rail only if it still means something with
+  the list hidden, which the colour scheme does. Below 1024px it sits under the History tab.
+- The choice persists as a `theme` key inside the existing **`textropy.preferences.v1`** blob,
+  beside the History and divider preferences. It is additive: a browser arriving from 0.2.1
+  keeps its layout, and an absent or malformed value falls back to `system`, so the page
+  follows the OS until told otherwise.
+- `frontend/lib/theme.ts` and `frontend/components/shared/InlineScript.tsx` — an inline
+  `<head>` script that resolves the preference and sets `data-theme` while the browser is
+  still parsing the document. Every React mechanism runs at or after hydration, which is
+  itself after the first paint, so without this a dark-mode reader gets a white flash on
+  every load.
+
+### Changed
+
+- Four values that silently assumed a light ground became tokens: `--on-accent` (text and
+  icons on a filled accent, which cannot keep borrowing `--surface` once the accent is the
+  lighter colour), `--positive-soft` and `--negative-soft` (the comparison diff's tints,
+  previously a 10% alpha chosen against white), and `--shadow-color` (Tailwind's shadows
+  hardcode black at 10%, invisible on a near-black ground). Light mode renders identically.
+
 ## [0.2.1] — 2026-08-24
 
 UI refinement across all three panes. The backend is unchanged from 0.2.0: no API contract
@@ -210,7 +243,8 @@ and lost if browser storage is cleared, server-side input length capping is off 
 models are loaded per worker process, and the response carries no general per-feature
 `status`/`error` field. The frontend has no test suite yet.
 
-[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/cyruscsc/textropy/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/cyruscsc/textropy/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cyruscsc/textropy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cyruscsc/textropy/releases/tag/v0.1.0

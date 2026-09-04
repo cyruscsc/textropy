@@ -59,7 +59,7 @@ lib/          api.ts · history.ts · preferences.ts · theme.ts · types.ts ·
 ARCHITECTURE.md   code-level walkthrough of all three
 ```
 
-Three things worth knowing before editing:
+Four things worth knowing before editing:
 
 - **The feature picker is built from `GET /api/v1/features`.** Feature names, tiers and
   the per-text/comparison split all come from the backend catalog. Never hardcode a
@@ -76,7 +76,7 @@ Three things worth knowing before editing:
   (system/light/dark) is a `localStorage` preference beside the pane-layout ones, applied
   by an inline script before first paint.
 
-[`ARCHITECTURE.md`](ARCHITECTURE.md) covers all three in detail, along with the design-token
+[`ARCHITECTURE.md`](ARCHITECTURE.md) covers all four in detail, along with the design-token
 system and the invariants a new component has to respect.
 
 ## Not yet built

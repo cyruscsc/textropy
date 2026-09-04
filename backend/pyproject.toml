@@ -1,6 +1,6 @@
 [project]
 name = "textropy-backend"
-version = "0.2.2"
+version = "0.2.3"
 description = "Textropy backend — stateless multi-pass linguistic text analysis API"
 requires-python = ">=3.11,<3.13"
 dependencies = [

@@ -11,6 +11,47 @@ git tag `vX.Y.Z` marks the pair.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-09-04
+
+Bottom navigation on small screens. Frontend only: the backend is unchanged from 0.2.2, no API
+contract moved, and no stored history entry is affected. One change is visible at every width,
+not just below 1024px — the Analysis and History panes no longer have a bottom action bar, and
+the actions that lived there are now in the pane headers.
+
+### Added
+
+- `frontend/components/shared/PaneTabBar.tsx` — below 1024px the **History / Analyze /
+  Results** tabs are a rounded-pill menu of icon-and-label buttons floating over the bottom of
+  the viewport, rather than a strip across the top. On a phone this is the app's primary
+  navigation and the top edge is the hardest place on the screen for a thumb to reach. Analyze
+  is the centre item and the pane the app opens on; the active tab is deliberately not
+  persisted, so every visit starts there.
+- Pane content scrolls underneath the menu. Its footprint is one new token,
+  **`--pane-menu-space`** in `globals.css` — the pill's height plus its gutter — reserved as
+  bottom padding by all three panes' scroll containers and by `Toast`, each with a
+  1024px-and-above reset. One definition, because the menu and everything dodging it have to
+  agree.
+- The menu hides itself while a textarea has focus. A fixed element is anchored to the layout
+  viewport, which the soft keyboard does not shrink, so it would otherwise sit stranded behind
+  the keyboard — and iOS Safari displaces fixed elements outright while the keyboard animates.
+  Dismissing the keyboard brings it back; nobody navigates panes mid-sentence.
+
+### Changed
+
+- Both pane footers are gone, and every pane is now a header plus a scroll body. Nothing can
+  sit statically under a floating menu — reserving space only helps scrolling content, while a
+  pinned bar is simply covered. The `min-h-[89px]` that had to be kept identical in two files
+  to align the two footers' hairlines goes with them.
+- **Analyze** moved into the Analysis pane header as a filled icon-and-label button, level with
+  Results' "Copy results", so the primary action is reachable without scrolling past the
+  feature list. Its validation hint moved to the end of the scroll body instead: the hint is
+  pane-level, and compare mode renders a character counter under each of two text boxes.
+- **Clear all** became an icon-only control in the History pane header, beside the theme
+  toggle. Its confirmation prompt and its disabled-at-zero-entries behaviour are unchanged.
+- Two design-system exceptions, both scoped to the floating menu and nothing else:
+  `rounded-full` against §12.4's 4px-everywhere radius, and `shadow-md`, which `globals.css`
+  otherwise reserves for toasts and modals.
+
 ## [0.2.2] — 2026-09-04
 
 Dark mode, and a system/light/dark preference to choose it. Frontend only: the backend is
@@ -243,7 +284,8 @@ and lost if browser storage is cleared, server-side input length capping is off 
 models are loaded per worker process, and the response carries no general per-feature
 `status`/`error` field. The frontend has no test suite yet.
 
-[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/cyruscsc/textropy/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/cyruscsc/textropy/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/cyruscsc/textropy/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/cyruscsc/textropy/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cyruscsc/textropy/compare/v0.1.0...v0.2.0

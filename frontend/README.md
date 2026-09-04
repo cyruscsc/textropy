@@ -59,7 +59,7 @@ lib/          api.ts · history.ts · preferences.ts · theme.ts · types.ts ·
 ARCHITECTURE.md   code-level walkthrough of all three
 ```
 
-Four things worth knowing before editing:
+Five things worth knowing before editing:
 
 - **The feature picker is built from `GET /api/v1/features`.** Feature names, tiers and
   the per-text/comparison split all come from the backend catalog. Never hardcode a
@@ -75,8 +75,12 @@ Four things worth knowing before editing:
   palettes, so a hardcoded hex is invisible until someone switches theme. The choice
   (system/light/dark) is a `localStorage` preference beside the pane-layout ones, applied
   by an inline script before first paint.
+- **Nothing sits statically under the floating menu.** Below 1024px the pane menu floats over
+  the bottom of the viewport, so every pane is a header plus a scroll body — a pinned bottom
+  bar would simply be covered. Scrolling content reserves `--pane-menu-space`; a pane's
+  actions belong in its header.
 
-[`ARCHITECTURE.md`](ARCHITECTURE.md) covers all four in detail, along with the design-token
+[`ARCHITECTURE.md`](ARCHITECTURE.md) covers all five in detail, along with the design-token
 system and the invariants a new component has to respect.
 
 ## Not yet built

@@ -578,23 +578,45 @@ bar is `lg:hidden` and all three panes are unconditionally `flex`. Sizing (`lg:w
 `lg:w-2/5`, `flex-1`) and the hairline `lg:border-r` dividers live on the same three `<section>`
 elements that serve the mobile layout.
 
-That tab bar is `components/shared/PaneTabBar.tsx`, and it is anchored to the **bottom** of the
-viewport: on a phone it is the app's primary navigation, and the top edge is the hardest place on
-the screen for a thumb to reach. Analyze is the centre item and the state's initial value, so the
-pane the app opens on is also the one under the thumb. It carries the two design-system exceptions
-in the app — `rounded-full` against §12.4's 4px-everywhere radius, and `shadow-md`, which
-`globals.css` otherwise reserves for toasts and modals — because a floating menu is what both rules
-would have described had §12 anticipated one.
+That tab bar is `components/shared/PaneTabBar.tsx`, and it **floats** over the bottom of the
+viewport: on a phone it is the app's primary navigation, and the top edge is the hardest place
+on the screen for a thumb to reach. Analyze is the centre item and the state's initial value,
+so the pane the app opens on is also the one under the thumb. It carries the two
+design-system exceptions in the app — `rounded-full` against §12.4's 4px-everywhere radius,
+and `shadow-md`, which `globals.css` otherwise reserves for toasts and modals — because a
+floating menu is what both rules would have described had §12 anticipated one.
 
-**It is in normal flow, not `position: fixed`.** `AnalysisFormPane` and `HistoryPane` both end in an
-89px bordered footer holding the Analyze button and Clear-all, so an overlaying menu would have to be
-paid for with a matching bottom padding threaded through every pane's scroll container *and* both
-footers — three values to keep in sync with the menu's height, plus iOS Safari's habit of displacing
-fixed elements when the soft keyboard opens over the two textareas. The gutter that makes it read as
-floating is the nav's own padding (12px, plus `env(safe-area-inset-bottom)`). The one thing this
-gives up is content scrolling under a translucent bar, which the flat hairline aesthetic does not
-want. `Toast` is the only element that has to know the menu exists: it is `fixed bottom-28` below
-`lg` and returns to §12's `bottom-6` at `lg`, where the menu is gone.
+**Nothing may sit statically underneath it**, which is why neither the Analysis pane nor the
+History pane has a footer any more. Reserving space around a fixed bar only works for
+scrolling content; a pinned action bar is simply covered. So the two 89px footers were
+deleted and their contents moved into the pane headers — `AnalyzeButton` beside the
+"Analysis" title, `ClearHistoryButton` and `ThemeToggle` beside "History" — which is where
+`ResultsPane` already mounted `CopyResultsButton`. All three panes are now the same shape,
+header plus scroll body, and the `min-h-[89px]` that had to be kept identical in two files
+to align the footers' hairlines is gone with them.
+
+What scrolling content reserves is `--pane-menu-space` (`globals.css`), the pill's height
+plus its gutter, applied as `pb-[var(--pane-menu-space)]` on each pane's scroll container
+with an `lg:` reset. One definition, because the menu and everything dodging it have to
+agree; `Toast` clears it by the same token rather than a second hardcoded offset. Note the
+padding is written as `px-6 pt-6 pb-[…]` rather than `p-6 pb-[…]` — `cn` is a plain join with
+no `tailwind-merge`, so layering over the shorthand would be relying on Tailwind's internal
+sort order to break the tie.
+
+**The keyboard.** A `position: fixed` element is anchored to the layout viewport, which the
+soft keyboard does not shrink, so the bar would be stranded behind it — and iOS Safari
+additionally displaces fixed elements while the keyboard animates. Rather than chase that
+with `visualViewport` geometry, which iOS reports inconsistently and which jitters through
+the animation, the bar steps aside: a `useTextareaFocused` hook watches document-level
+`focusin`/`focusout` and hides it (translate, fade, and `inert`, so it is not a tab stop
+off-screen) whenever a textarea holds focus. Nobody navigates panes mid-sentence, and
+dismissing the keyboard brings it straight back. Two details are load-bearing: `focusout`
+is read after a `setTimeout(0)`, because during the event `document.activeElement` is
+browser-dependently `body` or the incoming node and reading it synchronously flashes the bar
+back for a frame between Text A and Text B — and it is a timer rather than
+`requestAnimationFrame` because rAF does not run at all in a backgrounded tab, which would
+leave the bar stuck hidden until the tab is next looked at. The transition names `translate`,
+not `transform`: Tailwind v4 emits `translate-y-*` on the individual `translate` property.
 
 There is no mobile component tree to keep in sync, which is the entire point: the failure mode for
 a responsive fallback built as a parallel tree is that it silently rots as the desktop layout

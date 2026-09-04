@@ -167,13 +167,20 @@ export default function ResultsPane({
 
   return (
     <div className="bg-surface flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-0">
+      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-4">
         <h2 className="text-ink text-lg font-semibold">Results</h2>
         {response && state !== "analyzing" ? (
           <CopyResultsButton response={response} onError={controller.showToast} />
         ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{body()}</div>
+      {/*
+        Reserves the floating `PaneTabBar`'s footprint below `lg` so the last metric row
+        can be scrolled clear of it. This pane has no footer to displace — its action is
+        already in the header, which is the shape the other two now follow.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-[var(--pane-menu-space)] lg:pb-0">
+        {body()}
+      </div>
     </div>
   );
 }

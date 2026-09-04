@@ -34,16 +34,35 @@ export default function AnalysisFormPane({
 
   return (
     <div className="bg-surface flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-0">
+      {/*
+        The pane's action sits in the header, level with `ResultsPane`'s "Copy results" —
+        there is no footer to hold it, because the floating `PaneTabBar` covers the bottom
+        of the pane below `lg`. A header slot is also the only placement that keeps the
+        primary CTA reachable without scrolling past 35 feature checkboxes.
+      */}
+      <div className="flex shrink-0 items-center justify-between gap-4 p-6 pb-4">
         <h2 className="text-ink text-lg font-semibold">Analysis</h2>
-        {viewingHistory ? (
-          <span className="border-border text-ink-muted rounded border px-2 py-1 text-xs">
-            Viewing saved analysis
-          </span>
-        ) : null}
+        <AnalyzeButton
+          onClick={controller.runAnalysis}
+          disabled={!validation.canAnalyze}
+          analyzing={state === "analyzing"}
+          title={validation.reason}
+        />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
+      {/*
+        `px-6 pt-6` split out of `p-6` on purpose: `cn` is a plain join with no
+        `tailwind-merge`, so a `pb-*` layered over the shorthand would be relying on
+        Tailwind's internal sort order to win. The reserved space is what lets the last row
+        scroll clear of the floating menu; at `lg` there is no menu, so it reverts to 24px.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pt-6 pb-[var(--pane-menu-space)] lg:pb-6">
+        {viewingHistory ? (
+          <p className="border-border text-ink-muted rounded border px-3 py-2 text-xs">
+            Viewing saved analysis
+          </p>
+        ) : null}
+
         <ModeToggle
           mode={mode}
           onChange={controller.setMode}
@@ -94,33 +113,20 @@ export default function AnalysisFormPane({
             />
           ) : null}
         </section>
-      </div>
 
-      {/*
-        89px = 24px padding × 2 + a two-line `text-sm` hint (40px) + the 1px border, i.e.
-        the height this bar already reaches when the validation message wraps — which it
-        does between 1024px and ~1124px, where the space beside the button drops below the
-        ~274px the longest message needs. Flooring it there keeps the hairline still
-        instead of jumping 4px, and keeps it level with `HistoryPane`'s footer, which
-        carries the same value. `min-h` rather than `h` so a longer future message wraps
-        instead of clipping.
-      */}
-      <div className="border-border flex min-h-[89px] shrink-0 items-center justify-between gap-4 border-t p-6">
-        {viewingHistory ? (
-          <p className="text-ink-muted text-sm">
-            Start a new analysis to edit these inputs.
-          </p>
-        ) : (
-          <p className="text-ink-muted text-sm">
-            {validation.reason ?? `${effectiveSelection.length} features selected`}
-          </p>
-        )}
-        <AnalyzeButton
-          onClick={controller.runAnalysis}
-          disabled={!validation.canAnalyze}
-          analyzing={state === "analyzing"}
-          title={validation.reason}
-        />
+        {/*
+          Why the hint trails the text boxes rather than sitting beside the button it
+          explains: it is pane-level ("2 of 35 features selected", "Both texts are
+          required"), and compare mode renders *two* per-textbox counters, so folding it
+          into one of them would attach a pane fact to an arbitrary half of the form. Here
+          it reads as the last word on the whole form, directly under the final counter.
+        */}
+        <p className="text-ink-muted text-sm">
+          {viewingHistory
+            ? "Start a new analysis to edit these inputs."
+            : (validation.reason ??
+              `${effectiveSelection.length} features selected`)}
+        </p>
       </div>
     </div>
   );

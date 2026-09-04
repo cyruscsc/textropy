@@ -44,6 +44,18 @@
 
   /* Elevation is a shadow *colour* problem across themes, not a shadow geometry one. */
   --shadow-color: rgb(28 27 26 / 0.1);
+
+  /*
+   * Footprint of the floating pane menu (`PaneTabBar`): its pill height plus the gutter
+   * beneath it. Panes reserve this as bottom padding below `lg` so their last row can be
+   * scrolled clear of the menu, and `Toast` clears it by the same amount. One definition,
+   * because the menu and everything dodging it have to agree.
+   *
+   * Not a palette value, so it is not repeated in the dark block below, and not a
+   * `@theme inline` entry either — that namespace is for Tailwind's colour/font/radius
+   * scales, and this is consumed through `pb-[var(--pane-menu-space)]`.
+   */
+  --pane-menu-space: calc(5.5rem + env(safe-area-inset-bottom));
 }
 
 /**

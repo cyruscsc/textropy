@@ -47,19 +47,37 @@ export default function HistoryPane({
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-ink text-lg font-semibold">History</h2>
           {/*
-            Hidden below `lg`, where the tab bar governs which pane is showing and
-            collapsing this one would strand the saved analyses.
+            The pane's actions, in the header rather than a footer strip: below `lg` the
+            floating `PaneTabBar` covers the bottom of the pane, and padding around it only
+            saves scrolling content — a pinned action bar would simply be under the menu.
+            Icon-only so all three fit beside the title at the 280px column width.
           */}
-          <button
-            type="button"
-            onClick={onHide}
-            aria-expanded
-            aria-label="Hide history"
-            title="Hide history"
-            className="text-ink-muted hover:text-ink hover:bg-accent-soft hidden rounded p-1 transition-colors lg:inline-flex"
-          >
-            <PanelLeftClose size={16} strokeWidth={1.5} aria-hidden />
-          </button>
+          <div className="flex items-center gap-1">
+            <ClearHistoryButton
+              onClear={controller.clearAllHistory}
+              count={controller.history.length}
+            />
+            {/*
+              The app has no header at any breakpoint (§9), so the theme control has no
+              global home; History's is the one pane header present in both arrangements.
+              The `lg` collapse rail carries its own copy for when this pane is hidden.
+            */}
+            <ThemeToggle />
+            {/*
+              Hidden below `lg`, where the tab bar governs which pane is showing and
+              collapsing this one would strand the saved analyses.
+            */}
+            <button
+              type="button"
+              onClick={onHide}
+              aria-expanded
+              aria-label="Hide history"
+              title="Hide history"
+              className="text-ink-muted hover:text-ink hover:bg-accent-soft hidden rounded p-1 transition-colors lg:inline-flex"
+            >
+              <PanelLeftClose size={16} strokeWidth={1.5} aria-hidden />
+            </button>
+          </div>
         </div>
         <NewAnalysisButton
           onClick={controller.newAnalysis}
@@ -67,7 +85,7 @@ export default function HistoryPane({
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[var(--pane-menu-space)] lg:pb-4">
         {controller.history.length === 0 ? (
           <p className="text-ink-muted px-6 text-sm">
             Analyses you run are saved here, in this browser only.
@@ -93,34 +111,6 @@ export default function HistoryPane({
             ))}
           </ul>
         )}
-      </div>
-
-      {/*
-        Both panes' footers are pinned to the bottom of the viewport, so a height
-        difference shows up as their top hairlines failing to line up. `min-h` keeps this
-        one level with `AnalysisFormPane`'s footer — change the value in both or neither.
-        `px-3` stays: with `ClearHistoryButton`'s own `px-3` it puts the label at a 24px
-        inset, level with the pane's `p-6` header and the day-group labels. (The entry
-        rows sit at 14px instead — `border-l-2 pl-3` — so they can carry a full-bleed
-        hover band; that is deliberate and not what this aligns to.)
-      */}
-      <div className="border-border flex min-h-[89px] shrink-0 items-center justify-between gap-2 border-t px-3 py-6">
-        {/*
-          `ClearHistoryButton` is `w-full`, so it needs a flex parent of its own to keep
-          its full-bleed hover band and left-aligned label beside a sibling.
-        */}
-        <div className="min-w-0 flex-1">
-          <ClearHistoryButton
-            onClear={controller.clearAllHistory}
-            count={controller.history.length}
-          />
-        </div>
-        {/*
-          The app has no header at any breakpoint (§9), so this footer is its only
-          persistent chrome — and the one strip that is present in both arrangements, since
-          below `lg` History is a tab rather than a column.
-        */}
-        <ThemeToggle />
       </div>
     </div>
   );
